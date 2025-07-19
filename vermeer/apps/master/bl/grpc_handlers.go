@@ -26,6 +26,7 @@ import (
 	"time"
 	"vermeer/apps/compute"
 	"vermeer/apps/graphio"
+	"vermeer/apps/master/schedules"
 	"vermeer/apps/master/threshold"
 	"vermeer/apps/master/workers"
 	pb "vermeer/apps/protos"
@@ -99,6 +100,7 @@ func (h *ServerHandler) SayHelloMaster(ctx context.Context, req *pb.HelloMasterR
 	}
 
 	_, err = workerMgr.AddWorker(reqWorker)
+	Scheduler.ChangeWorkerStatus(reqWorker.Name, schedules.WorkerOngoingStatusIdle)
 	if err != nil {
 		logrus.Errorf("failed to add a WorkerClient to the WorkerManager, error: %s", err)
 		return &pb.HelloMasterResp{}, err
