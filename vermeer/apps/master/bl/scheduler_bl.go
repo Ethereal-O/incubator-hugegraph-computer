@@ -19,9 +19,7 @@ package bl
 
 import (
 	"errors"
-	"strconv"
 	"time"
-	"vermeer/apps/common"
 	"vermeer/apps/master/schedules"
 	"vermeer/apps/structure"
 
@@ -30,34 +28,16 @@ import (
 
 type ScheduleBl struct {
 	structure.MutexLocker
-	dispatchLocker   structure.MutexLocker
-	spaceQueue       *schedules.SpaceQueue
-	broker           *schedules.Broker
-	startChan        chan *structure.TaskInfo
-	isDispatchPaused bool
+	schedulerManager *schedules.SchedulerManager
 }
 
 func (s *ScheduleBl) Init() {
-	const defaultChanSizeConfig = "10"
-	chanSize := common.GetConfigDefault("start_chan_size", defaultChanSizeConfig).(string)
-	// Convert string to int
-	chanSizeInt, err := strconv.Atoi(chanSize)
-	if err != nil {
-		logrus.Errorf("failed to convert start_chan_size to int: %v", err)
-		logrus.Infof("using default start_chan_size: %s", defaultChanSizeConfig)
-		chanSizeInt, _ = strconv.Atoi(defaultChanSizeConfig)
-	}
-	startChan := make(chan *structure.TaskInfo, chanSizeInt)
-	s.startChan = startChan
-	s.spaceQueue = (&schedules.SpaceQueue{}).Init()
-	s.broker = (&schedules.Broker{}).Init()
-
-	go s.waitingTask()
-	go s.startTicker()
+	s.schedulerManager = &schedules.SchedulerManager{}
+	s.schedulerManager.Init(taskMgr.SetState, taskMgr.SetError)
 }
 
 func (s *ScheduleBl) PeekSpaceTail(space string) *structure.TaskInfo {
-	return s.spaceQueue.PeekTailTask(space)
+	return s.schedulerManager.GetLastTask(space)
 }
 
 // QueueTask Add the task to the inner queue.
@@ -78,13 +58,11 @@ func (s *ScheduleBl) QueueTask(taskInfo *structure.TaskInfo) (bool, error) {
 	}
 
 	// Notice: Ensure successful invocation.
-	ok, err := s.spaceQueue.PushTask(taskInfo)
+	ok, err := s.schedulerManager.QueueTask(taskInfo)
 	if err != nil {
 		taskMgr.SetError(taskInfo, err.Error())
 		return ok, err
 	}
-
-	go s.dispatch()
 
 	return ok, nil
 }
@@ -94,14 +72,12 @@ func (s *ScheduleBl) CancelTask(taskInfo *structure.TaskInfo) error {
 		return errors.New("the argument `taskInfo` is nil")
 	}
 
-	s.Lock()
-	isHeadTask := s.spaceQueue.IsHeadTask(taskInfo.ID)
-	task := s.spaceQueue.RemoveTask(taskInfo.ID)
-	s.Unlock(nil)
-
+	isHeadTask := s.schedulerManager.IsTaskOngoing(taskInfo.ID)
+	task := s.schedulerManager.RemoveTask(taskInfo.ID)
+	// err := s.schedulerManager.CancelTask(taskInfo)
 	isInQueue := false
 	if task != nil {
-		logrus.Infof("removed task '%d' from space queue", task.ID)
+		logrus.Infof("removed task '%d' from space queue", taskInfo.ID)
 		isInQueue = true
 	}
 
@@ -120,59 +96,30 @@ func (s *ScheduleBl) CancelTask(taskInfo *structure.TaskInfo) error {
 }
 
 func (s *ScheduleBl) IsDispatchPaused() bool {
-	return s.isDispatchPaused
+	return s.schedulerManager.IsDispatchPaused()
 }
 func (s *ScheduleBl) PauseDispatch() {
-	s.isDispatchPaused = true
+	s.schedulerManager.PauseDispatch()
 }
 
 func (s *ScheduleBl) ResumeDispatch() {
-	s.isDispatchPaused = false
+	s.schedulerManager.ResumeDispatch()
 }
 
 func (s *ScheduleBl) AllTasksInQueue() []*structure.TaskInfo {
-	return s.spaceQueue.AllTasks()
+	return s.schedulerManager.AllTasksInQueue()
 }
 
 func (s *ScheduleBl) TasksInQueue(space string) []*structure.TaskInfo {
-	return s.spaceQueue.SpaceTasks(space)
+	return s.schedulerManager.TasksInQueue(space)
 }
 
 func (s *ScheduleBl) CloseCurrent(taskId int32) error {
+	s.schedulerManager.ReleaseByTaskID(taskId)
+
 	logrus.Infof("invoke dispatch when task '%d' is closed", taskId)
-	s.dispatch()
-
+	s.schedulerManager.TryScheduleNextTasks()
 	return nil
-}
-
-func (s *ScheduleBl) handleStartTask(taskInfo *structure.TaskInfo) {
-	agent, status, err := s.broker.ApplyAgent(taskInfo)
-
-	if err != nil {
-		logrus.Errorf("apply agent error: %v", err)
-		taskMgr.SetError(taskInfo, err.Error())
-		return
-	}
-
-	switch status {
-	case schedules.AgentStatusNoWorker:
-		fallthrough
-	case schedules.AgentStatusWorkerNotReady:
-		logrus.Warnf("failed to apply an agent for task '%d', graph: %s/%s, status: %s",
-			taskInfo.ID, taskInfo.SpaceName, taskInfo.GraphName, status)
-		return
-	}
-
-	if agent == nil {
-		logrus.Infof("no available agent for task '%d', graph: %s/%s, status: %s",
-			taskInfo.ID, taskInfo.SpaceName, taskInfo.GraphName, status)
-		return
-	}
-
-	logrus.Infof("got an agent '%s' for task '%d', graph: %s/%s",
-		agent.GroupName(), taskInfo.ID, taskInfo.SpaceName, taskInfo.GraphName)
-
-	go s.startWaitingTask(agent, taskInfo)
 }
 
 func (s *ScheduleBl) handleCancelTask(taskInfo *structure.TaskInfo) error {
@@ -191,6 +138,37 @@ func (s *ScheduleBl) handleCancelTask(taskInfo *structure.TaskInfo) error {
 	}
 
 	return nil
+}
+
+// now, start task!
+func (s *ScheduleBl) handleStartTask(taskInfo *structure.TaskInfo) {
+	agent, status, err := s.schedulerManager.GetAgent(taskInfo)
+
+	if err != nil {
+		logrus.Errorf("apply agent error: %v", err)
+		taskMgr.SetError(taskInfo, err.Error())
+		return
+	}
+
+	// switch status {
+	// case schedules.AgentStatusNoWorker:
+	// 	fallthrough
+	// case schedules.AgentStatusWorkerNotReady:
+	// 	logrus.Warnf("failed to apply an agent for task '%d', graph: %s/%s, status: %s",
+	// 		taskInfo.ID, taskInfo.SpaceName, taskInfo.GraphName, status)
+	// 	return
+	// }
+
+	if agent == nil {
+		logrus.Infof("no available agent for task '%d', graph: %s/%s, status: %s",
+			taskInfo.ID, taskInfo.SpaceName, taskInfo.GraphName, status)
+		return
+	}
+
+	logrus.Infof("got an agent '%s' for task '%d', graph: %s/%s",
+		agent.GroupName(), taskInfo.ID, taskInfo.SpaceName, taskInfo.GraphName)
+
+	go s.startWaitingTask(agent, taskInfo)
 }
 
 func (s *ScheduleBl) startWaitingTask(agent *schedules.Agent, taskInfo *structure.TaskInfo) {
@@ -225,65 +203,5 @@ func (s *ScheduleBl) startWaitingTask(agent *schedules.Agent, taskInfo *structur
 	if err != nil {
 		logrus.Errorf("failed to start a task, type: %s, taskID: %d, caused by: %v", taskInfo.Type, taskInfo.ID, err)
 		taskMgr.SetError(taskInfo, err.Error())
-	}
-
-}
-
-func (s *ScheduleBl) dispatch() {
-	defer func() {
-		if err := recover(); err != nil {
-			logrus.Errorln("dispatch() has been recovered:", err)
-		}
-	}()
-
-	if err := s.doDispatch(); err != nil {
-		logrus.Errorf("do dispatching error:%v", err)
-	}
-}
-
-func (s *ScheduleBl) doDispatch() error {
-	if s.isDispatchPaused {
-		logrus.Warn("the dispatching was paused")
-		return nil
-	}
-
-	defer s.dispatchLocker.Unlock(s.dispatchLocker.Lock())
-
-	buffer := s.spaceQueue.HeadTasks()
-	if len(buffer) == 0 {
-		return nil
-	}
-
-	for _, task := range buffer {
-		select {
-		case s.startChan <- task:
-		default:
-			logrus.Warnf("the start channel is full, dropped task: %d", task.ID)
-		}
-
-	}
-
-	return nil
-}
-
-func (s *ScheduleBl) waitingTask() {
-	for taskInfo := range s.startChan {
-		if taskInfo == nil {
-			logrus.Warnf("recieved a nil task from startChan")
-			return
-		}
-
-		logrus.Infof("chan received task '%d' to start", taskInfo.ID)
-		s.handleStartTask(taskInfo)
-	}
-}
-
-func (s *ScheduleBl) startTicker() {
-	// Create a ticker that triggers every 3 seconds
-	ticker := time.Tick(3 * time.Second)
-
-	for range ticker {
-		//logrus.Debug("Ticker ticked")
-		s.dispatch()
 	}
 }
