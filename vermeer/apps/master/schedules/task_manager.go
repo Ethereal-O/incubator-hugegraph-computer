@@ -8,15 +8,14 @@ import (
 type TaskManager struct {
 	// This struct is responsible for managing tasks in the scheduling system.
 	// A map from task ID to TaskInfo can be used to track tasks.
-	allTaskMap       map[int32]*structure.TaskInfo
-	availableTaskMap map[int32]*structure.TaskInfo
+	allTaskMap   map[int32]*structure.TaskInfo
+	allTaskQueue []*structure.TaskInfo
 	// A map from task ID to worker group can be used to track which worker group is handling which task.
 	workerGroupMap map[int32]string
 }
 
 func (t *TaskManager) Init() *TaskManager {
 	t.allTaskMap = make(map[int32]*structure.TaskInfo)
-	t.availableTaskMap = make(map[int32]*structure.TaskInfo)
 	t.workerGroupMap = make(map[int32]string)
 	return t
 }
@@ -65,9 +64,12 @@ func (t *TaskManager) GetTaskByID(taskID int32) (*structure.TaskInfo, error) {
 
 func (t *TaskManager) GetLastTask(spaceName string) *structure.TaskInfo {
 	// Implement logic to get the last task in the queue for the given space
-	for _, task := range t.allTaskMap {
-		if task.SpaceName == spaceName {
-			return task
+	if len(t.allTaskQueue) == 0 {
+		return nil
+	}
+	for i := len(t.allTaskQueue) - 1; i >= 0; i-- {
+		if t.allTaskQueue[i].SpaceName == spaceName {
+			return t.allTaskQueue[i]
 		}
 	}
 	return nil
@@ -81,14 +83,33 @@ func (t *TaskManager) GetAllTasks() []*structure.TaskInfo {
 	return tasks
 }
 
+func (t *TaskManager) GetAllTasksNotRunning() []*structure.TaskInfo {
+	tasks := make([]*structure.TaskInfo, 0, len(t.allTaskMap))
+	for _, task := range t.allTaskMap {
+		if task.State == structure.TaskStateWaiting {
+			tasks = append(tasks, task)
+		}
+	}
+	return tasks
+}
+
 func (t *TaskManager) GetTasksInQueue(space string) []*structure.TaskInfo {
 	tasks := make([]*structure.TaskInfo, 0)
-	for _, task := range t.allTaskMap {
+	for _, task := range t.allTaskQueue {
 		if task.SpaceName == space {
 			tasks = append(tasks, task)
 		}
 	}
 	return tasks
+}
+
+func (t *TaskManager) GetWorkerGroupMap() map[int32]string {
+	// Return a copy of the worker group map to avoid external modifications
+	groupMap := make(map[int32]string, len(t.workerGroupMap))
+	for k, v := range t.workerGroupMap {
+		groupMap[k] = v
+	}
+	return groupMap
 }
 
 func (t *TaskManager) IsTaskOngoing(taskID int32) bool {

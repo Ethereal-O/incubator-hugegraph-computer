@@ -23,6 +23,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"vermeer/apps/master/workers"
 	. "vermeer/apps/master/workers"
 )
 
@@ -72,42 +73,42 @@ func (b *Broker) AllAgents() []*Agent {
 	return res
 }
 
-func (b *Broker) ApplyAgent(taskInfo *structure.TaskInfo) (*Agent, AgentStatus, error) {
+func (b *Broker) ApplyAgent(taskInfo *structure.TaskInfo) (*Agent, AgentStatus, map[string]*workers.WorkerClient, error) {
 	if taskInfo == nil {
-		return nil, AgentStatusError, fmt.Errorf("taskInfo is nil")
+		return nil, AgentStatusError, nil, fmt.Errorf("taskInfo is nil")
 	}
 
 	defer b.Unlock(b.Lock())
 
 	agent, workers, err := b.getAgent(taskInfo)
 	if err != nil {
-		return nil, AgentStatusError, err
+		return nil, AgentStatusError, nil, err
 	}
 
 	if agent == nil {
-		return nil, AgentStatusPending, nil
+		return nil, AgentStatusPending, nil, nil
 	}
 
 	if workers == nil || len(workers) == 0 {
-		return nil, AgentStatusNoWorker, nil
+		return nil, AgentStatusNoWorker, nil, nil
 	}
 
 	if !b.isWorkersReady(workers) {
 		logrus.Warnf("the workers of agent '%s' are not ready", agent.GroupName())
-		return nil, AgentStatusWorkerNotReady, nil
+		return nil, AgentStatusWorkerNotReady, nil, nil
 	}
 
 	if b.isAgentBusy(agent) {
-		return nil, AgentStatusAgentBusy, nil
+		return nil, AgentStatusAgentBusy, nil, nil
 	}
 
 	if b.isWorkerBusy(workers, agent) {
-		return nil, AgentStatusWorkerBusy, nil
+		return nil, AgentStatusWorkerBusy, nil, nil
 	}
 
 	agent.AssignTask(taskInfo)
 
-	return agent, AgentStatusOk, nil
+	return agent, AgentStatusOk, workers, nil
 }
 
 // func (b *Broker) isAgentReady(taskInfo *structure.TaskInfo, agent *Agent) bool {
