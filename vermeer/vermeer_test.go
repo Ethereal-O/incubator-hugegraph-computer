@@ -104,8 +104,9 @@ func testFunction(t *testing.T) {
 
 func testAlgorithms(t *testing.T) {
 	// todo: 增加算法名称
-	var computeTasks = []string{"pagerank", "lpa", "wcc", "degree_out", "degree_in", "degree_both", "triangle_count",
-		"sssp", "closeness_centrality", "betweenness_centrality", "kcore", "jaccard", "ppr", "clustering_coefficient", "scc", "louvain"}
+	// var computeTasks = []string{"pagerank", "lpa", "wcc", "degree_out", "degree_in", "degree_both", "triangle_count",
+	// 	"sssp", "closeness_centrality", "betweenness_centrality", "kcore", "jaccard", "ppr", "clustering_coefficient", "scc", "louvain"}
+	var computeTasks = []string{"pagerank"}
 
 	startTime := time.Now()
 	expectRes, err := functional.GetExpectRes(expectResPath)

@@ -11,12 +11,12 @@ type TaskManager struct {
 	allTaskMap   map[int32]*structure.TaskInfo
 	allTaskQueue []*structure.TaskInfo
 	// A map from task ID to worker group can be used to track which worker group is handling which task.
-	workerGroupMap map[int32]string
+	taskToworkerGroupMap map[int32]string
 }
 
 func (t *TaskManager) Init() *TaskManager {
 	t.allTaskMap = make(map[int32]*structure.TaskInfo)
-	t.workerGroupMap = make(map[int32]string)
+	t.taskToworkerGroupMap = make(map[int32]string)
 	return t
 }
 
@@ -40,7 +40,7 @@ func (t *TaskManager) RemoveTask(taskID int32) error {
 		return errors.New("task not found")
 	}
 	delete(t.allTaskMap, taskID)
-	delete(t.workerGroupMap, taskID)
+	delete(t.taskToworkerGroupMap, taskID)
 	return nil
 }
 
@@ -50,7 +50,7 @@ func (t *TaskManager) AssignGroup(taskInfo *structure.TaskInfo) error {
 	if group == "" {
 		return errors.New("failed to assign group for task")
 	}
-	t.workerGroupMap[taskInfo.ID] = group
+	t.taskToworkerGroupMap[taskInfo.ID] = group
 	return nil
 }
 
@@ -83,7 +83,7 @@ func (t *TaskManager) GetAllTasks() []*structure.TaskInfo {
 	return tasks
 }
 
-func (t *TaskManager) GetAllTasksNotRunning() []*structure.TaskInfo {
+func (t *TaskManager) GetAllTasksWaitng() []*structure.TaskInfo {
 	tasks := make([]*structure.TaskInfo, 0, len(t.allTaskMap))
 	for _, task := range t.allTaskMap {
 		if task.State == structure.TaskStateWaiting {
@@ -103,10 +103,10 @@ func (t *TaskManager) GetTasksInQueue(space string) []*structure.TaskInfo {
 	return tasks
 }
 
-func (t *TaskManager) GetWorkerGroupMap() map[int32]string {
+func (t *TaskManager) GetTaskToWorkerGroupMap() map[int32]string {
 	// Return a copy of the worker group map to avoid external modifications
-	groupMap := make(map[int32]string, len(t.workerGroupMap))
-	for k, v := range t.workerGroupMap {
+	groupMap := make(map[int32]string, len(t.taskToworkerGroupMap))
+	for k, v := range t.taskToworkerGroupMap {
 		groupMap[k] = v
 	}
 	return groupMap

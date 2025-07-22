@@ -92,24 +92,25 @@ func (s *ScheduleBl) TryScheduleNextTasks() {
 // Main routine to schedule tasks
 func (s *ScheduleBl) tryScheduleInner(softSchedule bool) error {
 	// Implement logic to get the next task in the queue for the given space
+	defer s.Unlock(s.Lock())
 
 	// step 1: make sure all tasks have alloc to a worker group
 	// This is done by the TaskManager, which assigns a worker group to each task
 
 	// step 2: get available resources and tasks
 	logrus.Debugf("scheduling next tasks, softSchedule: %v", softSchedule)
-	availableWorkers := s.resourceManager.GetIdleWorkers()
-	allTasks := s.taskManager.GetAllTasksNotRunning()
-	if len(allTasks) == 0 || len(availableWorkers) == 0 {
-		logrus.Debugf("no available tasks or workers, availableTasks: %d, availableWorkers: %d",
-			len(allTasks), len(availableWorkers))
+	idleWorkers := s.resourceManager.GetIdleWorkers()
+	waitingTasks := s.taskManager.GetAllTasksWaitng()
+	if len(waitingTasks) == 0 || len(idleWorkers) == 0 {
+		logrus.Debugf("no available tasks or workers, waitingTasks: %d, idleWorkers: %d",
+			len(waitingTasks), len(idleWorkers))
 		return nil
 	}
-	logrus.Debugf("available tasks: %d, available workers: %d", len(allTasks), len(availableWorkers))
+	logrus.Debugf("waiting tasks: %d, idle workers: %d", len(waitingTasks), len(idleWorkers))
 
 	// step 3: return the task with the highest priority or small tasks which can be executed immediately
-	workerGroupMap := s.taskManager.GetWorkerGroupMap()
-	nextTasks, err := s.algorithmManager.ScheduleNextTasks(allTasks, workerGroupMap, availableWorkers, softSchedule)
+	taskToWorkerGroupMap := s.taskManager.GetTaskToWorkerGroupMap()
+	nextTasks, err := s.algorithmManager.ScheduleNextTasks(waitingTasks, taskToWorkerGroupMap, idleWorkers, softSchedule)
 	if err != nil {
 		logrus.Errorf("failed to schedule next tasks: %v", err)
 		return err
@@ -239,6 +240,7 @@ func (s *ScheduleBl) startWaitingTask(agent *schedules.Agent, taskInfo *structur
 		}
 	}()
 
+	// TODO: Is here need a lock? TOCTTOU
 	if taskInfo.State != structure.TaskStateWaiting {
 		logrus.Errorf("task state is not in 'Waiting' state, taskID: %v", taskInfo)
 		return

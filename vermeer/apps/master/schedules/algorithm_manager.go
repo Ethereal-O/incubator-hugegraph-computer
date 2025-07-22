@@ -6,7 +6,7 @@ type Algorithm interface {
 	// Name returns the name of the algorithm
 	Name() string
 	// Execute runs the algorithm with the provided parameters
-	ScheduleNextTasks(allTasks []*structure.TaskInfo, workerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error)
+	ScheduleNextTasks(waitingTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error)
 }
 
 type AlgorithmManager struct {
@@ -46,12 +46,12 @@ func (am *AlgorithmManager) ResumeDispatch() {
 	am.dispatchPaused = false
 }
 
-func (am *AlgorithmManager) ScheduleNextTasks(allTasks []*structure.TaskInfo, workerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error) {
+func (am *AlgorithmManager) ScheduleNextTasks(waitingTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error) {
 	if am.dispatchPaused {
 		return nil, nil // No tasks to schedule if dispatch is paused
 	}
 
-	tasks, err := am.supportedAlgorithms[am.nowAlgorithm].ScheduleNextTasks(allTasks, workerGroupMap, idleWorkers, softSchedule)
+	tasks, err := am.supportedAlgorithms[am.nowAlgorithm].ScheduleNextTasks(waitingTasks, taskToWorkerGroupMap, idleWorkers, softSchedule)
 	if err != nil {
 		return nil, err
 	}
@@ -65,13 +65,20 @@ func (f *FIFOAlgorithm) Name() string {
 	return "FIFO"
 }
 
-func (f *FIFOAlgorithm) ScheduleNextTasks(allTasks []*structure.TaskInfo, workerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error) {
-	if len(allTasks) == 0 {
+func (f *FIFOAlgorithm) ScheduleNextTasks(waitingTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error) {
+	if len(waitingTasks) == 0 {
 		return nil, nil // No tasks to schedule
 	}
 
 	// For FIFO, we simply return the available tasks in the order they are provided
-	first_task := allTasks[0]
+	for _, task := range waitingTasks {
+		if task.State != structure.TaskStateWaiting {
+			continue // Only consider tasks that are in the waiting state
+		}
+		if group, exists := taskToWorkerGroupMap[task.ID]; exists && group != "" {
+			return []*structure.TaskInfo{task}, nil // Return the first task that can be scheduled
+		}
+	}
 
-	return []*structure.TaskInfo{first_task}, nil
+	return nil, nil
 }
