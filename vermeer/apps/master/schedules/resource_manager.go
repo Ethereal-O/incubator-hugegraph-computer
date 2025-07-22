@@ -11,6 +11,7 @@ const (
 	WorkerOngoingStatusIdle    WorkerOngoingStatus = "idle"
 	WorkerOngoingStatusRunning WorkerOngoingStatus = "running"
 	WorkerOngoingStatusPaused  WorkerOngoingStatus = "paused"
+	WorkerOngoingStatusDeleted WorkerOngoingStatus = "deleted"
 )
 
 type ResourceManager struct {
@@ -130,9 +131,16 @@ func (rm *ResourceManager) changeWorkerStatus(workerName string, status WorkerOn
 				rm.availableWorkerGroups[groupName] = false
 			}
 		}
+	} else if status == WorkerOngoingStatusDeleted {
+		delete(rm.workerStatus, workerName)
+		delete(rm.runningWorkerTasks, workerName)
+		delete(rm.availableWorkerGroups, workerName)
 	}
+
+	// TODO: Other status changes can be handled here if needed
 }
 
+// TODO: when sync task created, need to alloc worker?
 func (rm *ResourceManager) ChangeWorkerStatus(workerName string, status WorkerOngoingStatus) {
 	defer rm.Unlock(rm.Lock())
 

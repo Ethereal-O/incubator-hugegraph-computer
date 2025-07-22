@@ -168,11 +168,20 @@ func (s *ScheduleBl) QueueTask(taskInfo *structure.TaskInfo) (bool, error) {
 
 // ******** CloseCurrent ********
 
-func (s *ScheduleBl) CloseCurrent(taskId int32) error {
+func (s *ScheduleBl) CloseCurrent(taskId int32, removeWorkerName ...string) error {
 	// trace tasks need these workers, check if these tasks are available
 	s.taskManager.RemoveTask(taskId)
 	// release the worker group
 	s.resourceManager.ReleaseByTaskID(taskId)
+
+	if len(removeWorkerName) > 0 {
+		workerName := removeWorkerName[0]
+		if workerName == "" {
+			return errors.New("the argument `removeWorkerName` is empty")
+		}
+		logrus.Infof("removing worker '%s' from resource manager", workerName)
+		s.ChangeWorkerStatus(workerName, schedules.WorkerOngoingStatusDeleted)
+	}
 
 	logrus.Infof("invoke dispatch when task '%d' is closed", taskId)
 	s.TryScheduleNextTasks()
