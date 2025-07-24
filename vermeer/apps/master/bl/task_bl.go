@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 	"vermeer/apps/compute"
 
@@ -60,6 +62,27 @@ func (tb *TaskBl) CreateTaskInfo(
 
 	if taskInfo, err = creator.CreateTaskInfo(graphName, params, isCheck); err != nil {
 		return nil, err
+	}
+
+	// for scheduler
+	if params != nil {
+		if priority, ok := params["priority"]; ok {
+			if p, err := strconv.Atoi(priority); err == nil {
+				taskInfo.Priority = int32(p)
+			} else {
+				logrus.Warnf("priority convert to int32 error:%v", err)
+			}
+		}
+		if preorders, ok := params["preorders"]; ok {
+			preorderList := strings.Split(preorders, ",")
+			for _, preorder := range preorderList {
+				if pid, err := strconv.Atoi(preorder); err == nil {
+					taskInfo.Preorders = append(taskInfo.Preorders, int32(pid))
+				} else {
+					logrus.Warnf("preorder convert to int32 error:%v", err)
+				}
+			}
+		}
 	}
 
 	return taskInfo, nil

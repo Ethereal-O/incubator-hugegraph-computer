@@ -55,6 +55,10 @@ type TaskInfo struct {
 	wg               *sync.WaitGroup
 	Action           int32
 	StatisticsResult map[string]any
+
+	// for scheduler
+	Priority  int32
+	Preorders []int32
 }
 
 func (ti *TaskInfo) SetState(state TaskState) {
