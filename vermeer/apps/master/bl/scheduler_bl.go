@@ -31,11 +31,11 @@ import (
 type ScheduleBl struct {
 	structure.MutexLocker
 	// resource management
-	resourceManager *schedules.ResourceManager
+	resourceManager *schedules.SchedulerResourceManager
 	// algorithm management
-	algorithmManager *schedules.AlgorithmManager
+	algorithmManager *schedules.SchedulerAlgorithmManager
 	// task management
-	taskManager *schedules.TaskManager
+	taskManager *schedules.SchedulerTaskManager
 	// start channel for tasks to be started
 	startChan chan *structure.TaskInfo
 }
@@ -54,11 +54,11 @@ func (s *ScheduleBl) Init() {
 	startChan := make(chan *structure.TaskInfo, chanSizeInt)
 	s.startChan = startChan
 
-	s.resourceManager = &schedules.ResourceManager{}
+	s.resourceManager = &schedules.SchedulerResourceManager{}
 	s.resourceManager.Init()
-	s.taskManager = &schedules.TaskManager{}
+	s.taskManager = &schedules.SchedulerTaskManager{}
 	s.taskManager.Init()
-	s.algorithmManager = &schedules.AlgorithmManager{}
+	s.algorithmManager = &schedules.SchedulerAlgorithmManager{}
 	s.algorithmManager.Init()
 	go s.startTicker()
 	go s.waitingStartedTask()

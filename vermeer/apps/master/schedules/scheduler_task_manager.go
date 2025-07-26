@@ -5,7 +5,7 @@ import (
 	"vermeer/apps/structure"
 )
 
-type TaskManager struct {
+type SchedulerTaskManager struct {
 	// This struct is responsible for managing tasks in the scheduling system.
 	// A map from task ID to TaskInfo can be used to track tasks.
 	allTaskMap   map[int32]*structure.TaskInfo
@@ -14,13 +14,13 @@ type TaskManager struct {
 	taskToworkerGroupMap map[int32]string
 }
 
-func (t *TaskManager) Init() *TaskManager {
+func (t *SchedulerTaskManager) Init() *SchedulerTaskManager {
 	t.allTaskMap = make(map[int32]*structure.TaskInfo)
 	t.taskToworkerGroupMap = make(map[int32]string)
 	return t
 }
 
-func (t *TaskManager) QueueTask(taskInfo *structure.TaskInfo) (bool, error) {
+func (t *SchedulerTaskManager) QueueTask(taskInfo *structure.TaskInfo) (bool, error) {
 	if taskInfo == nil {
 		return false, errors.New("the argument `taskInfo` is nil")
 	}
@@ -35,7 +35,7 @@ func (t *TaskManager) QueueTask(taskInfo *structure.TaskInfo) (bool, error) {
 	return true, nil
 }
 
-func (t *TaskManager) RemoveTask(taskID int32) error {
+func (t *SchedulerTaskManager) RemoveTask(taskID int32) error {
 	if _, exists := t.allTaskMap[taskID]; !exists {
 		return errors.New("task not found")
 	}
@@ -45,7 +45,7 @@ func (t *TaskManager) RemoveTask(taskID int32) error {
 }
 
 // update or create a task in the task map
-func (t *TaskManager) AssignGroup(taskInfo *structure.TaskInfo) error {
+func (t *SchedulerTaskManager) AssignGroup(taskInfo *structure.TaskInfo) error {
 	group := workerMgr.ApplyGroup(taskInfo.SpaceName, taskInfo.GraphName)
 	if group == "" {
 		return errors.New("failed to assign group for task")
@@ -54,7 +54,7 @@ func (t *TaskManager) AssignGroup(taskInfo *structure.TaskInfo) error {
 	return nil
 }
 
-func (t *TaskManager) GetTaskByID(taskID int32) (*structure.TaskInfo, error) {
+func (t *SchedulerTaskManager) GetTaskByID(taskID int32) (*structure.TaskInfo, error) {
 	task, exists := t.allTaskMap[taskID]
 	if !exists {
 		return nil, errors.New("task not found")
@@ -62,7 +62,7 @@ func (t *TaskManager) GetTaskByID(taskID int32) (*structure.TaskInfo, error) {
 	return task, nil
 }
 
-func (t *TaskManager) GetLastTask(spaceName string) *structure.TaskInfo {
+func (t *SchedulerTaskManager) GetLastTask(spaceName string) *structure.TaskInfo {
 	// Implement logic to get the last task in the queue for the given space
 	if len(t.allTaskQueue) == 0 {
 		return nil
@@ -75,7 +75,7 @@ func (t *TaskManager) GetLastTask(spaceName string) *structure.TaskInfo {
 	return nil
 }
 
-func (t *TaskManager) GetAllTasks() []*structure.TaskInfo {
+func (t *SchedulerTaskManager) GetAllTasks() []*structure.TaskInfo {
 	tasks := make([]*structure.TaskInfo, 0, len(t.allTaskMap))
 	for _, task := range t.allTaskMap {
 		tasks = append(tasks, task)
@@ -83,7 +83,7 @@ func (t *TaskManager) GetAllTasks() []*structure.TaskInfo {
 	return tasks
 }
 
-func (t *TaskManager) GetAllTasksWaitng() []*structure.TaskInfo {
+func (t *SchedulerTaskManager) GetAllTasksWaitng() []*structure.TaskInfo {
 	tasks := make([]*structure.TaskInfo, 0, len(t.allTaskMap))
 	for _, task := range t.allTaskMap {
 		if task.State == structure.TaskStateWaiting {
@@ -93,7 +93,7 @@ func (t *TaskManager) GetAllTasksWaitng() []*structure.TaskInfo {
 	return tasks
 }
 
-func (t *TaskManager) GetTasksInQueue(space string) []*structure.TaskInfo {
+func (t *SchedulerTaskManager) GetTasksInQueue(space string) []*structure.TaskInfo {
 	tasks := make([]*structure.TaskInfo, 0)
 	for _, task := range t.allTaskQueue {
 		if task.SpaceName == space {
@@ -103,7 +103,7 @@ func (t *TaskManager) GetTasksInQueue(space string) []*structure.TaskInfo {
 	return tasks
 }
 
-func (t *TaskManager) GetTaskToWorkerGroupMap() map[int32]string {
+func (t *SchedulerTaskManager) GetTaskToWorkerGroupMap() map[int32]string {
 	// Return a copy of the worker group map to avoid external modifications
 	groupMap := make(map[int32]string, len(t.taskToworkerGroupMap))
 	for k, v := range t.taskToworkerGroupMap {
@@ -112,7 +112,7 @@ func (t *TaskManager) GetTaskToWorkerGroupMap() map[int32]string {
 	return groupMap
 }
 
-func (t *TaskManager) IsTaskOngoing(taskID int32) bool {
+func (t *SchedulerTaskManager) IsTaskOngoing(taskID int32) bool {
 	// Check if the task is currently ongoing
 	task, exists := t.allTaskMap[taskID]
 	if !exists {

@@ -14,7 +14,7 @@ const (
 	WorkerOngoingStatusDeleted WorkerOngoingStatus = "deleted"
 )
 
-type ResourceManager struct {
+type SchedulerResourceManager struct {
 	structure.MutexLocker
 	workerStatus          map[string]WorkerOngoingStatus
 	runningWorkerTasks    map[string][]int32 // worker ID to list of running task IDs
@@ -24,14 +24,14 @@ type ResourceManager struct {
 	broker *Broker
 }
 
-func (rm *ResourceManager) Init() {
+func (rm *SchedulerResourceManager) Init() {
 	rm.workerStatus = make(map[string]WorkerOngoingStatus)
 	rm.runningWorkerTasks = make(map[string][]int32)
 	rm.availableWorkerGroups = make(map[string]bool)
 	rm.broker = new(Broker).Init()
 }
 
-func (rm *ResourceManager) ReleaseByTaskID(taskID int32) {
+func (rm *SchedulerResourceManager) ReleaseByTaskID(taskID int32) {
 	defer rm.Unlock(rm.Lock())
 
 	for worker, status := range rm.workerStatus {
@@ -53,7 +53,7 @@ func (rm *ResourceManager) ReleaseByTaskID(taskID int32) {
 	}
 }
 
-func (rm *ResourceManager) isTaskRunningOnWorker(worker string, taskID int32) bool {
+func (rm *SchedulerResourceManager) isTaskRunningOnWorker(worker string, taskID int32) bool {
 	if tasks, exists := rm.runningWorkerTasks[worker]; exists {
 		for _, id := range tasks {
 			if id == taskID {
@@ -64,7 +64,7 @@ func (rm *ResourceManager) isTaskRunningOnWorker(worker string, taskID int32) bo
 	return false
 }
 
-func (rm *ResourceManager) GetAgentAndAssignTask(taskInfo *structure.TaskInfo) (*Agent, AgentStatus, error) {
+func (rm *SchedulerResourceManager) GetAgentAndAssignTask(taskInfo *structure.TaskInfo) (*Agent, AgentStatus, error) {
 	if taskInfo == nil {
 		return nil, AgentStatusError, errors.New("taskInfo is nil")
 	}
@@ -96,7 +96,7 @@ func (rm *ResourceManager) GetAgentAndAssignTask(taskInfo *structure.TaskInfo) (
 	return agent, status, nil
 }
 
-func (rm *ResourceManager) GetIdleWorkers() []string {
+func (rm *SchedulerResourceManager) GetIdleWorkers() []string {
 	defer rm.Unlock(rm.Lock())
 
 	idleWorkers := make([]string, 0)
@@ -108,7 +108,7 @@ func (rm *ResourceManager) GetIdleWorkers() []string {
 	return idleWorkers
 }
 
-func (rm *ResourceManager) changeWorkerStatus(workerName string, status WorkerOngoingStatus) {
+func (rm *SchedulerResourceManager) changeWorkerStatus(workerName string, status WorkerOngoingStatus) {
 	rm.workerStatus[workerName] = status
 
 	if status == WorkerOngoingStatusIdle {
@@ -141,7 +141,7 @@ func (rm *ResourceManager) changeWorkerStatus(workerName string, status WorkerOn
 }
 
 // TODO: when sync task created, need to alloc worker?
-func (rm *ResourceManager) ChangeWorkerStatus(workerName string, status WorkerOngoingStatus) {
+func (rm *SchedulerResourceManager) ChangeWorkerStatus(workerName string, status WorkerOngoingStatus) {
 	defer rm.Unlock(rm.Lock())
 
 	rm.changeWorkerStatus(workerName, status)
