@@ -100,17 +100,17 @@ func (s *ScheduleBl) tryScheduleInner(softSchedule bool) error {
 	// step 2: get available resources and tasks
 	logrus.Debugf("scheduling next tasks, softSchedule: %v", softSchedule)
 	idleWorkers := s.resourceManager.GetIdleWorkers()
-	waitingTasks := s.taskManager.GetAllTasksWaitng()
-	if len(waitingTasks) == 0 || len(idleWorkers) == 0 {
-		logrus.Debugf("no available tasks or workers, waitingTasks: %d, idleWorkers: %d",
-			len(waitingTasks), len(idleWorkers))
+	allTasks := s.taskManager.GetAllTasks()
+	if len(allTasks) == 0 || len(idleWorkers) == 0 {
+		logrus.Debugf("no available tasks or workers, allTasks: %d, idleWorkers: %d",
+			len(allTasks), len(idleWorkers))
 		return nil
 	}
-	logrus.Debugf("waiting tasks: %d, idle workers: %d", len(waitingTasks), len(idleWorkers))
+	logrus.Debugf("all tasks: %d, idle workers: %d", len(allTasks), len(idleWorkers))
 
 	// step 3: return the task with the highest priority or small tasks which can be executed immediately
 	taskToWorkerGroupMap := s.taskManager.GetTaskToWorkerGroupMap()
-	nextTasks, err := s.algorithmManager.ScheduleNextTasks(waitingTasks, taskToWorkerGroupMap, idleWorkers, softSchedule)
+	nextTasks, err := s.algorithmManager.ScheduleNextTasks(allTasks, taskToWorkerGroupMap, idleWorkers, softSchedule)
 	if err != nil {
 		logrus.Errorf("failed to schedule next tasks: %v", err)
 		return err
