@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	"vermeer/apps/master/schedules"
 	pb "vermeer/apps/protos"
 	"vermeer/apps/structure"
 
@@ -158,6 +159,8 @@ func (bc *baseCanceler) doCancelTask() (isContinue bool, err error) {
 				canceled = false
 				return
 			}
+			// set worker state to idle
+			Scheduler.ChangeWorkerStatus(workerName, schedules.WorkerOngoingStatusIdle)
 		}(workerName)
 	}
 	wg.Wait()

@@ -4,6 +4,8 @@ import (
 	"sort"
 	"time"
 	"vermeer/apps/structure"
+
+	"github.com/sirupsen/logrus"
 )
 
 type SchedulerAlgorithm interface {
@@ -175,15 +177,21 @@ func (p *PriorityElderSchedulerAlgorithm) FilterNextTasks(allTasks []*structure.
 }
 
 func (p *PriorityElderSchedulerAlgorithm) CalculateTaskEmergency(task *structure.TaskInfo, taskToWorkerGroupMap map[int32]string) int64 {
+	// step 0: get params
+	ageParam := int64(1)
+	priorityParam := int64(1)
+	resourceParam := int64(1e10)
+	randomValueParam := int64(1)
 	// step 1: age
-	ageCost := time.Since(task.CreateTime).Milliseconds() / 1000 // in seconds
+	ageCost := ageParam * time.Since(task.CreateTime).Milliseconds() / 1000 // in seconds
 	// step 2: priority
-	priorityCost := int64(task.Priority)
+	priorityCost := priorityParam * int64(task.Priority)
 	// step 3: resource cost
-	gm := structure.GraphManager
-	resourceCost := 1 / gm.GetGraphByName(task.SpaceName, task.GraphName).VertexCount
+	graph := structure.GraphManager.GetGraphByName(task.SpaceName, task.GraphName)
+	resourceCost := resourceParam / max(1, graph.VertexCount+graph.EdgeCount) // Avoid division by zero, ensure at least 1
 	// step 4: some random value
-	randomValue := int64(1) // Placeholder for any random value logic
+	randomValue := int64(randomValueParam) // Placeholder for any random value logic
+	logrus.Debugf("Task %d: Age Cost: %d, Priority Cost: %d, Resource Cost: %d, Random Value: %d", task.ID, ageCost, priorityCost, resourceCost, randomValue)
 	return ageCost + priorityCost + resourceCost + randomValue
 }
 
@@ -202,6 +210,8 @@ func (p *PriorityElderSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structur
 			continue // Only consider tasks that are in the waiting state
 		}
 		if group, exists := taskToWorkerGroupMap[task.ID]; exists && group != "" {
+			logrus.Debugf("Task %d is assigned to worker group %s", task.ID, group)
+			// logrus.Debugf("Task %d is scheduled with emergency value %d", task.ID, p.CalculateTaskEmergency(task, taskToWorkerGroupMap))
 			return []*structure.TaskInfo{task}, nil // Return the first task that can be scheduled
 		}
 	}
