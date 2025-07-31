@@ -36,6 +36,8 @@ type ScheduleBl struct {
 	algorithmManager *schedules.SchedulerAlgorithmManager
 	// task management
 	taskManager *schedules.SchedulerTaskManager
+	// cron management
+	cronManager *schedules.SchedulerCronManager
 	// start channel for tasks to be started
 	startChan chan *structure.TaskInfo
 }
@@ -60,6 +62,8 @@ func (s *ScheduleBl) Init() {
 	s.taskManager.Init()
 	s.algorithmManager = &schedules.SchedulerAlgorithmManager{}
 	s.algorithmManager.Init()
+	s.cronManager = &schedules.SchedulerCronManager{}
+	s.cronManager.Init(s.QueueTask)
 	go s.startTicker()
 	go s.waitingStartedTask()
 }
@@ -164,6 +168,14 @@ func (s *ScheduleBl) QueueTask(taskInfo *structure.TaskInfo) (bool, error) {
 		return ok, err
 	}
 
+	if s.cronManager.CheckCronExpression(taskInfo.CronExpr) == nil {
+		if err := s.cronManager.AddCronTask(taskInfo); err != nil {
+			logrus.Errorf("failed to add cron task: %v", err)
+			return false, err
+		}
+		logrus.Infof("added cron task for task '%d' with expression '%s'", taskInfo.ID, taskInfo.CronExpr)
+	}
+
 	return ok, nil
 }
 
@@ -174,6 +186,8 @@ func (s *ScheduleBl) CloseCurrent(taskId int32, removeWorkerName ...string) erro
 	s.taskManager.RemoveTask(taskId)
 	// release the worker group
 	s.resourceManager.ReleaseByTaskID(taskId)
+	// stop the cron job if exists
+	s.cronManager.DeleteTask(taskId)
 
 	if len(removeWorkerName) > 0 {
 		workerName := removeWorkerName[0]
@@ -287,6 +301,7 @@ func (s *ScheduleBl) CancelTask(taskInfo *structure.TaskInfo) error {
 
 	isHeadTask := s.taskManager.IsTaskOngoing(taskInfo.ID)
 	task := s.taskManager.RemoveTask(taskInfo.ID)
+	s.cronManager.DeleteTask(taskInfo.ID)
 	// err := s.taskManager.CancelTask(taskInfo)
 	isInQueue := false
 	if task != nil {
