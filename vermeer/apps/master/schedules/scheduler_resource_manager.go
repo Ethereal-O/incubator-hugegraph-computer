@@ -3,22 +3,25 @@ package schedules
 import (
 	"errors"
 	"vermeer/apps/structure"
+
+	"github.com/sirupsen/logrus"
 )
 
 type WorkerOngoingStatus string
 
 const (
-	WorkerOngoingStatusIdle    WorkerOngoingStatus = "idle"
-	WorkerOngoingStatusRunning WorkerOngoingStatus = "running"
-	WorkerOngoingStatusPaused  WorkerOngoingStatus = "paused"
-	WorkerOngoingStatusDeleted WorkerOngoingStatus = "deleted"
+	WorkerOngoingStatusIdle              WorkerOngoingStatus = "idle"
+	WorkerOngoingStatusRunning           WorkerOngoingStatus = "running"
+	WorkerOngoingStatusConcurrentRunning WorkerOngoingStatus = "concurrent_running"
+	WorkerOngoingStatusPaused            WorkerOngoingStatus = "paused"
+	WorkerOngoingStatusDeleted           WorkerOngoingStatus = "deleted"
 )
 
 type SchedulerResourceManager struct {
 	structure.MutexLocker
-	workerStatus          map[string]WorkerOngoingStatus
-	runningWorkerTasks    map[string][]int32 // worker ID to list of running task IDs
-	availableWorkerGroups map[string]bool    // worker group name to availability status
+	workerStatus            map[string]WorkerOngoingStatus
+	workerGroupStatus       map[string]WorkerOngoingStatus
+	runningWorkerGroupTasks map[string][]int32 // worker group name to list of running task IDs
 	// broker just responsible for communication with workers
 	// it can not apply tasks to workers directly
 	broker *Broker
@@ -26,35 +29,43 @@ type SchedulerResourceManager struct {
 
 func (rm *SchedulerResourceManager) Init() {
 	rm.workerStatus = make(map[string]WorkerOngoingStatus)
-	rm.runningWorkerTasks = make(map[string][]int32)
-	rm.availableWorkerGroups = make(map[string]bool)
+	rm.workerGroupStatus = make(map[string]WorkerOngoingStatus)
+	rm.runningWorkerGroupTasks = make(map[string][]int32)
 	rm.broker = new(Broker).Init()
 }
 
 func (rm *SchedulerResourceManager) ReleaseByTaskID(taskID int32) {
 	defer rm.Unlock(rm.Lock())
 
-	for worker, status := range rm.workerStatus {
-		if status == WorkerOngoingStatusRunning && rm.isTaskRunningOnWorker(worker, taskID) {
-			delete(rm.workerStatus, worker)
-			if tasks, exists := rm.runningWorkerTasks[worker]; exists {
+	for workerGroup, status := range rm.workerGroupStatus {
+		if (status == WorkerOngoingStatusRunning || status == WorkerOngoingStatusConcurrentRunning) && rm.isTaskRunningOnWorkerGroup(workerGroup, taskID) {
+			delete(rm.workerGroupStatus, workerGroup)
+			if tasks, exists := rm.runningWorkerGroupTasks[workerGroup]; exists {
 				for i, id := range tasks {
 					if id == taskID {
-						rm.runningWorkerTasks[worker] = append(tasks[:i], tasks[i+1:]...)
-						if len(rm.runningWorkerTasks[worker]) == 0 {
-							delete(rm.runningWorkerTasks, worker)
+						rm.runningWorkerGroupTasks[workerGroup] = append(tasks[:i], tasks[i+1:]...)
+						if len(rm.runningWorkerGroupTasks[workerGroup]) == 0 {
+							delete(rm.runningWorkerGroupTasks, workerGroup)
 						}
 						break
 					}
 				}
 			}
-			rm.changeWorkerStatus(worker, WorkerOngoingStatusIdle)
+			if tasks, exists := rm.runningWorkerGroupTasks[workerGroup]; !exists || len(tasks) == 0 {
+				for _, worker := range workerMgr.GetGroupWorkers(workerGroup) {
+					rm.changeWorkerStatus(worker.Name, WorkerOngoingStatusIdle)
+				}
+			} else {
+				for _, worker := range workerMgr.GetGroupWorkers(workerGroup) {
+					rm.changeWorkerStatus(worker.Name, WorkerOngoingStatusConcurrentRunning)
+				}
+			}
 		}
 	}
 }
 
-func (rm *SchedulerResourceManager) isTaskRunningOnWorker(worker string, taskID int32) bool {
-	if tasks, exists := rm.runningWorkerTasks[worker]; exists {
+func (rm *SchedulerResourceManager) isTaskRunningOnWorkerGroup(workerGroup string, taskID int32) bool {
+	if tasks, exists := rm.runningWorkerGroupTasks[workerGroup]; exists {
 		for _, id := range tasks {
 			if id == taskID {
 				return true
@@ -82,62 +93,83 @@ func (rm *SchedulerResourceManager) GetAgentAndAssignTask(taskInfo *structure.Ta
 	// Assign the task to the agent
 	agent.AssignTask(taskInfo)
 
+	runningStatus := WorkerOngoingStatusRunning
+	if _, exists := rm.runningWorkerGroupTasks[agent.GroupName()]; !exists {
+		rm.runningWorkerGroupTasks[agent.GroupName()] = []int32{}
+		runningStatus = WorkerOngoingStatusRunning
+		rm.workerGroupStatus[agent.GroupName()] = runningStatus
+	} else {
+		runningStatus = WorkerOngoingStatusConcurrentRunning
+		rm.workerGroupStatus[agent.GroupName()] = runningStatus
+	}
+	rm.runningWorkerGroupTasks[agent.GroupName()] = append(rm.runningWorkerGroupTasks[agent.GroupName()], taskInfo.ID)
+
 	for _, worker := range workers {
 		if worker == nil {
 			continue
 		}
-		rm.workerStatus[worker.Name] = WorkerOngoingStatusRunning
-		if _, exists := rm.runningWorkerTasks[worker.Name]; !exists {
-			rm.runningWorkerTasks[worker.Name] = []int32{}
-		}
-		rm.runningWorkerTasks[worker.Name] = append(rm.runningWorkerTasks[worker.Name], taskInfo.ID)
+		rm.workerStatus[worker.Name] = runningStatus
 	}
 
 	return agent, status, nil
 }
 
-func (rm *SchedulerResourceManager) GetIdleWorkers() []string {
+func (rm *SchedulerResourceManager) GetIdleWorkerGroups() []string {
 	defer rm.Unlock(rm.Lock())
 
-	idleWorkers := make([]string, 0)
-	for worker, status := range rm.workerStatus {
+	idleWorkerGroups := make([]string, 0)
+	for workerGroup, status := range rm.workerGroupStatus {
 		if status == WorkerOngoingStatusIdle {
-			idleWorkers = append(idleWorkers, worker)
+			idleWorkerGroups = append(idleWorkerGroups, workerGroup)
 		}
 	}
-	return idleWorkers
+	return idleWorkerGroups
+}
+
+func (rm *SchedulerResourceManager) GetConcurrentWorkerGroups() []string {
+	defer rm.Unlock(rm.Lock())
+
+	concurrentWorkerGroups := make([]string, 0)
+	for workerGroup, status := range rm.workerGroupStatus {
+		if status == WorkerOngoingStatusConcurrentRunning {
+			concurrentWorkerGroups = append(concurrentWorkerGroups, workerGroup)
+		}
+	}
+	return concurrentWorkerGroups
 }
 
 func (rm *SchedulerResourceManager) changeWorkerStatus(workerName string, status WorkerOngoingStatus) {
 	rm.workerStatus[workerName] = status
 
-	if status == WorkerOngoingStatusIdle {
+	if status == WorkerOngoingStatusIdle || status == WorkerOngoingStatusConcurrentRunning {
 		workerInfo := workerMgr.GetWorkerInfo(workerName)
 
 		// get worker group name
 		groupName := workerInfo.Group
 		if groupName != "" {
 			// check all workers in this group are idle
-			allIdle := true
+			allIdleOrConcurrent := true
 			for _, w := range workerMgr.GetGroupWorkers(groupName) {
-				if rm.workerStatus[w.Name] != WorkerOngoingStatusIdle {
-					allIdle = false
+				if rm.workerStatus[w.Name] != WorkerOngoingStatusIdle && rm.workerStatus[w.Name] != WorkerOngoingStatusConcurrentRunning {
+					allIdleOrConcurrent = false
 					break
 				}
 			}
-			if allIdle {
-				rm.availableWorkerGroups[groupName] = true
-			} else {
-				rm.availableWorkerGroups[groupName] = false
+			if allIdleOrConcurrent {
+				logrus.Debugf("Change worker group '%s' status to '%s' because all %d workers are idle or concurrent running", groupName, status, len(workerMgr.GetGroupWorkers(groupName)))
+				rm.changeWorkerGroupStatus(groupName, status)
 			}
 		}
 	} else if status == WorkerOngoingStatusDeleted {
 		delete(rm.workerStatus, workerName)
-		delete(rm.runningWorkerTasks, workerName)
-		delete(rm.availableWorkerGroups, workerName)
 	}
 
 	// TODO: Other status changes can be handled here if needed
+}
+
+func (rm *SchedulerResourceManager) changeWorkerGroupStatus(workerGroup string, status WorkerOngoingStatus) {
+	logrus.Infof("Change worker group '%s' status to '%s'", workerGroup, status)
+	rm.workerGroupStatus[workerGroup] = status
 }
 
 // TODO: when sync task created, need to alloc worker?

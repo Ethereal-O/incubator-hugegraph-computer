@@ -99,18 +99,19 @@ func (s *ScheduleBl) tryScheduleInner(softSchedule bool) error {
 
 	// step 2: get available resources and tasks
 	logrus.Debugf("scheduling next tasks, softSchedule: %v", softSchedule)
-	idleWorkers := s.resourceManager.GetIdleWorkers()
+	idleWorkerGroups := s.resourceManager.GetIdleWorkerGroups()
+	concurrentWorkerGroups := s.resourceManager.GetConcurrentWorkerGroups()
 	allTasks := s.taskManager.GetAllTasks()
-	if len(allTasks) == 0 || len(idleWorkers) == 0 {
-		logrus.Debugf("no available tasks or workers, allTasks: %d, idleWorkers: %d",
-			len(allTasks), len(idleWorkers))
+	if len(allTasks) == 0 || (len(idleWorkerGroups) == 0 && len(concurrentWorkerGroups) == 0) {
+		logrus.Debugf("no available tasks or workerGroups, allTasks: %d, workerGroups: %d/%d",
+			len(allTasks), len(idleWorkerGroups), len(concurrentWorkerGroups))
 		return nil
 	}
-	logrus.Debugf("all tasks: %d, idle workers: %d", len(allTasks), len(idleWorkers))
+	logrus.Debugf("all tasks: %d, workerGroups: %d/%d", len(allTasks), len(idleWorkerGroups), len(concurrentWorkerGroups))
 
 	// step 3: return the task with the highest priority or small tasks which can be executed immediately
 	taskToWorkerGroupMap := s.taskManager.GetTaskToWorkerGroupMap()
-	nextTasks, err := s.algorithmManager.ScheduleNextTasks(allTasks, taskToWorkerGroupMap, idleWorkers, softSchedule)
+	nextTasks, err := s.algorithmManager.ScheduleNextTasks(allTasks, taskToWorkerGroupMap, idleWorkerGroups, concurrentWorkerGroups, softSchedule)
 	if err != nil {
 		logrus.Errorf("failed to schedule next tasks: %v", err)
 		return err
@@ -321,6 +322,9 @@ func (s *ScheduleBl) handleCancelTask(taskInfo *structure.TaskInfo) error {
 		taskMgr.SetError(taskInfo, err.Error())
 		return err
 	}
+
+	// set worker state to idle or concurrent running
+	s.resourceManager.ReleaseByTaskID(taskInfo.ID)
 
 	return nil
 }

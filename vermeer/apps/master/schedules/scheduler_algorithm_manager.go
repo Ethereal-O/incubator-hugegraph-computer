@@ -12,9 +12,9 @@ type SchedulerAlgorithm interface {
 	// Name returns the name of the SchedulerAlgorithm
 	Name() string
 	// FilterNextTasks filters the next tasks to be scheduled based on the provided parameters
-	FilterNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error)
+	FilterNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkerGroups []string, concurrentWorkerGroups []string, softSchedule bool) ([]*structure.TaskInfo, error)
 	// ScheduleNextTasks schedules the next tasks based on the filtered tasks
-	ScheduleNextTasks(filteredTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error)
+	ScheduleNextTasks(filteredTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkerGroups []string, concurrentWorkerGroups []string, softSchedule bool) ([]*structure.TaskInfo, error)
 }
 
 type SchedulerAlgorithmManager struct {
@@ -73,7 +73,7 @@ func (am *SchedulerAlgorithmManager) ResumeDispatch() {
 	am.dispatchPaused = false
 }
 
-func (am *SchedulerAlgorithmManager) ScheduleNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error) {
+func (am *SchedulerAlgorithmManager) ScheduleNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkerGroups []string, concurrentWorkerGroups []string, softSchedule bool) ([]*structure.TaskInfo, error) {
 	if am.dispatchPaused {
 		return nil, nil // No tasks to schedule if dispatch is paused
 	}
@@ -81,7 +81,7 @@ func (am *SchedulerAlgorithmManager) ScheduleNextTasks(allTasks []*structure.Tas
 	filteredTasks := allTasks
 	for _, algorithm := range am.filteredSchedulerAlgorithms {
 		var err error
-		filteredTasks, err = algorithm.FilterNextTasks(filteredTasks, taskToWorkerGroupMap, idleWorkers, softSchedule)
+		filteredTasks, err = algorithm.FilterNextTasks(filteredTasks, taskToWorkerGroupMap, idleWorkerGroups, concurrentWorkerGroups, softSchedule)
 		if err != nil {
 			return nil, err
 		}
@@ -93,7 +93,7 @@ func (am *SchedulerAlgorithmManager) ScheduleNextTasks(allTasks []*structure.Tas
 	// only support one scheduling algorithm for now
 	// get first algorithm
 	for _, algorithm := range am.schuduledSchedulerAlgorithms {
-		tasks, err := algorithm.ScheduleNextTasks(filteredTasks, taskToWorkerGroupMap, idleWorkers, softSchedule)
+		tasks, err := algorithm.ScheduleNextTasks(filteredTasks, taskToWorkerGroupMap, idleWorkerGroups, concurrentWorkerGroups, softSchedule)
 		if err != nil {
 			return nil, err
 		}
@@ -109,12 +109,12 @@ func (f *FIFOSchedulerAlgorithm) Name() string {
 	return "FIFO"
 }
 
-func (f *FIFOSchedulerAlgorithm) FilterNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error) {
+func (f *FIFOSchedulerAlgorithm) FilterNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkerGroups []string, concurrentWorkerGroups []string, softSchedule bool) ([]*structure.TaskInfo, error) {
 	// just return the waiting tasks as is for FIFO
 	return allTasks, nil
 }
 
-func (f *FIFOSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error) {
+func (f *FIFOSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkerGroups []string, concurrentWorkerGroups []string, softSchedule bool) ([]*structure.TaskInfo, error) {
 	if len(allTasks) == 0 {
 		return nil, nil // No tasks to schedule
 	}
@@ -125,7 +125,12 @@ func (f *FIFOSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.TaskInf
 			continue // Only consider tasks that are in the waiting state
 		}
 		if group, exists := taskToWorkerGroupMap[task.ID]; exists && group != "" {
-			return []*structure.TaskInfo{task}, nil // Return the first task that can be scheduled
+			for _, idleGroup := range idleWorkerGroups {
+				if group == idleGroup {
+					logrus.Debugf("Task %d is assigned to worker group %s", task.ID, group)
+					return []*structure.TaskInfo{task}, nil // Return the first task that can be scheduled
+				}
+			}
 		}
 	}
 
@@ -138,12 +143,12 @@ func (p *PrioritySchedulerAlgorithm) Name() string {
 	return "Priority"
 }
 
-func (p *PrioritySchedulerAlgorithm) FilterNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error) {
+func (p *PrioritySchedulerAlgorithm) FilterNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkerGroups []string, concurrentWorkerGroups []string, softSchedule bool) ([]*structure.TaskInfo, error) {
 	// just return the waiting tasks as is for Priority
 	return allTasks, nil
 }
 
-func (p *PrioritySchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error) {
+func (p *PrioritySchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkerGroups []string, concurrentWorkerGroups []string, softSchedule bool) ([]*structure.TaskInfo, error) {
 	if len(allTasks) == 0 {
 		return nil, nil // No tasks to schedule
 	}
@@ -158,7 +163,12 @@ func (p *PrioritySchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.Tas
 			continue // Only consider tasks that are in the waiting state
 		}
 		if group, exists := taskToWorkerGroupMap[task.ID]; exists && group != "" {
-			return []*structure.TaskInfo{task}, nil // Return the first task that can be scheduled
+			for _, idleGroup := range idleWorkerGroups {
+				if group == idleGroup {
+					logrus.Debugf("Task %d is assigned to worker group %s", task.ID, group)
+					return []*structure.TaskInfo{task}, nil // Return the first task that can be scheduled
+				}
+			}
 		}
 	}
 
@@ -171,7 +181,7 @@ func (p *PriorityElderSchedulerAlgorithm) Name() string {
 	return "PriorityElder"
 }
 
-func (p *PriorityElderSchedulerAlgorithm) FilterNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error) {
+func (p *PriorityElderSchedulerAlgorithm) FilterNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkerGroups []string, concurrentWorkerGroups []string, softSchedule bool) ([]*structure.TaskInfo, error) {
 	// just return the waiting tasks as is for PriorityElder
 	return allTasks, nil
 }
@@ -195,7 +205,7 @@ func (p *PriorityElderSchedulerAlgorithm) CalculateTaskEmergency(task *structure
 	return ageCost + priorityCost + resourceCost + randomValue
 }
 
-func (p *PriorityElderSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error) {
+func (p *PriorityElderSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkerGroups []string, concurrentWorkerGroups []string, softSchedule bool) ([]*structure.TaskInfo, error) {
 	if len(allTasks) == 0 {
 		return nil, nil // No tasks to schedule
 	}
@@ -210,9 +220,12 @@ func (p *PriorityElderSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structur
 			continue // Only consider tasks that are in the waiting state
 		}
 		if group, exists := taskToWorkerGroupMap[task.ID]; exists && group != "" {
-			logrus.Debugf("Task %d is assigned to worker group %s", task.ID, group)
-			// logrus.Debugf("Task %d is scheduled with emergency value %d", task.ID, p.CalculateTaskEmergency(task, taskToWorkerGroupMap))
-			return []*structure.TaskInfo{task}, nil // Return the first task that can be scheduled
+			for _, idleGroup := range idleWorkerGroups {
+				if group == idleGroup {
+					logrus.Debugf("Task %d is assigned to worker group %s", task.ID, group)
+					return []*structure.TaskInfo{task}, nil // Return the first task that can be scheduled
+				}
+			}
 		}
 	}
 
@@ -225,7 +238,7 @@ func (w *WaitingSchedulerAlgorithm) Name() string {
 	return "Waiting"
 }
 
-func (w *WaitingSchedulerAlgorithm) FilterNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error) {
+func (w *WaitingSchedulerAlgorithm) FilterNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkerGroups []string, concurrentWorkerGroups []string, softSchedule bool) ([]*structure.TaskInfo, error) {
 	waitingTasks := make([]*structure.TaskInfo, 0)
 	for _, task := range allTasks {
 		if task.State == structure.TaskStateWaiting {
@@ -235,8 +248,8 @@ func (w *WaitingSchedulerAlgorithm) FilterNextTasks(allTasks []*structure.TaskIn
 	return waitingTasks, nil
 }
 
-func (w *WaitingSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error) {
-	waitingTasks, err := w.FilterNextTasks(allTasks, taskToWorkerGroupMap, idleWorkers, softSchedule)
+func (w *WaitingSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkerGroups []string, concurrentWorkerGroups []string, softSchedule bool) ([]*structure.TaskInfo, error) {
+	waitingTasks, err := w.FilterNextTasks(allTasks, taskToWorkerGroupMap, idleWorkerGroups, concurrentWorkerGroups, softSchedule)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +266,7 @@ func (d *DependsSchedulerAlgorithm) Name() string {
 	return "Depends"
 }
 
-func (d *DependsSchedulerAlgorithm) FilterNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error) {
+func (d *DependsSchedulerAlgorithm) FilterNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkerGroups []string, concurrentWorkerGroups []string, softSchedule bool) ([]*structure.TaskInfo, error) {
 	if len(allTasks) == 0 {
 		return nil, nil // No tasks to schedule
 	}
@@ -287,7 +300,7 @@ func (d *DependsSchedulerAlgorithm) FilterNextTasks(allTasks []*structure.TaskIn
 	return filteredTasks, nil
 }
 
-func (d *DependsSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkers []string, softSchedule bool) ([]*structure.TaskInfo, error) {
+func (d *DependsSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkerGroups []string, concurrentWorkerGroups []string, softSchedule bool) ([]*structure.TaskInfo, error) {
 	if len(allTasks) == 0 {
 		return nil, nil // No tasks to schedule
 	}
@@ -313,7 +326,12 @@ func (d *DependsSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.Task
 		}
 		if allDepsSatisfied {
 			if group, exists := taskToWorkerGroupMap[task.ID]; exists && group != "" {
-				return []*structure.TaskInfo{task}, nil // Return the first task that can be scheduled
+				for _, idleGroup := range idleWorkerGroups {
+					if group == idleGroup {
+						logrus.Debugf("Task %d is assigned to worker group %s", task.ID, group)
+						return []*structure.TaskInfo{task}, nil // Return the first task that can be scheduled
+					}
+				}
 			}
 		}
 	}

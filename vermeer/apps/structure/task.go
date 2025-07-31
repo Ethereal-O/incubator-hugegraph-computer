@@ -59,6 +59,7 @@ type TaskInfo struct {
 	// for scheduler
 	Priority  int32
 	Preorders []int32
+	Exclusive bool // whether the task can be executed concurrently with other tasks
 }
 
 func (ti *TaskInfo) SetState(state TaskState) {

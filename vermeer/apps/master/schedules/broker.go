@@ -73,7 +73,7 @@ func (b *Broker) AllAgents() []*Agent {
 	return res
 }
 
-func (b *Broker) ApplyAgent(taskInfo *structure.TaskInfo) (*Agent, AgentStatus, map[string]*workers.WorkerClient, error) {
+func (b *Broker) ApplyAgent(taskInfo *structure.TaskInfo, forceApply ...bool) (*Agent, AgentStatus, map[string]*workers.WorkerClient, error) {
 	if taskInfo == nil {
 		return nil, AgentStatusError, nil, fmt.Errorf("taskInfo is nil")
 	}
@@ -98,12 +98,14 @@ func (b *Broker) ApplyAgent(taskInfo *structure.TaskInfo) (*Agent, AgentStatus, 
 		return nil, AgentStatusWorkerNotReady, nil, nil
 	}
 
-	if b.isAgentBusy(agent) {
-		return nil, AgentStatusAgentBusy, nil, nil
-	}
+	if !(forceApply != nil && len(forceApply) > 0 && forceApply[0]) {
+		if b.isAgentBusy(agent) {
+			return nil, AgentStatusAgentBusy, nil, nil
+		}
 
-	if b.isWorkerBusy(workers, agent) {
-		return nil, AgentStatusWorkerBusy, nil, nil
+		if b.isWorkerBusy(workers, agent) {
+			return nil, AgentStatusWorkerBusy, nil, nil
+		}
 	}
 
 	agent.AssignTask(taskInfo)

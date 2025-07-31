@@ -65,6 +65,9 @@ func (tb *TaskBl) CreateTaskInfo(
 	}
 
 	// for scheduler
+	taskInfo.Priority = 0
+	taskInfo.Preorders = make([]int32, 0)
+	taskInfo.Exclusive = false // default to false, can be set to true if needed
 	if params != nil {
 		if priority, ok := params["priority"]; ok {
 			if p, err := strconv.Atoi(priority); err == nil {
@@ -81,6 +84,13 @@ func (tb *TaskBl) CreateTaskInfo(
 				} else {
 					logrus.Warnf("preorder convert to int32 error:%v", err)
 				}
+			}
+		}
+		if exclusive, ok := params["exclusive"]; ok {
+			if ex, err := strconv.ParseBool(exclusive); err == nil {
+				taskInfo.Exclusive = ex
+			} else {
+				logrus.Warnf("exclusive convert to bool error:%v", err)
 			}
 		}
 	}
