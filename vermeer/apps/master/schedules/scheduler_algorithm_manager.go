@@ -125,6 +125,7 @@ func (f *FIFOSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.TaskInf
 			continue // Only consider tasks that are in the waiting state
 		}
 		if group, exists := taskToWorkerGroupMap[task.ID]; exists && group != "" {
+			// only support idle worker groups for now
 			for _, idleGroup := range idleWorkerGroups {
 				if group == idleGroup {
 					logrus.Debugf("Task %d is assigned to worker group %s", task.ID, group)
@@ -163,6 +164,7 @@ func (p *PrioritySchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.Tas
 			continue // Only consider tasks that are in the waiting state
 		}
 		if group, exists := taskToWorkerGroupMap[task.ID]; exists && group != "" {
+			// only support idle worker groups for now
 			for _, idleGroup := range idleWorkerGroups {
 				if group == idleGroup {
 					logrus.Debugf("Task %d is assigned to worker group %s", task.ID, group)
@@ -226,6 +228,15 @@ func (p *PriorityElderSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structur
 					return []*structure.TaskInfo{task}, nil // Return the first task that can be scheduled
 				}
 			}
+			// if allow concurrent running, check if the group is in concurrent worker groups
+			if !task.Exclusive {
+				for _, concurrentGroup := range concurrentWorkerGroups {
+					if group == concurrentGroup {
+						logrus.Debugf("Task %d is assigned to concurrent worker group %s", task.ID, group)
+						return []*structure.TaskInfo{task}, nil // Return the first task that can be scheduled
+					}
+				}
+			}
 		}
 	}
 
@@ -256,8 +267,21 @@ func (w *WaitingSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.Task
 	if len(waitingTasks) == 0 {
 		return nil, nil
 	}
-	// For waiting tasks, we simply return them as is
-	return waitingTasks, nil
+	for _, task := range waitingTasks {
+		if task.State != structure.TaskStateWaiting {
+			continue // Only consider tasks that are in the waiting state
+		}
+		if group, exists := taskToWorkerGroupMap[task.ID]; exists && group != "" {
+			// only support idle worker groups for now
+			for _, idleGroup := range idleWorkerGroups {
+				if group == idleGroup {
+					logrus.Debugf("Task %d is assigned to worker group %s", task.ID, group)
+					return []*structure.TaskInfo{task}, nil // Return the first task that can be scheduled
+				}
+			}
+		}
+	}
+	return nil, nil // No tasks scheduled
 }
 
 type DependsSchedulerAlgorithm struct{}
@@ -326,6 +350,7 @@ func (d *DependsSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.Task
 		}
 		if allDepsSatisfied {
 			if group, exists := taskToWorkerGroupMap[task.ID]; exists && group != "" {
+				// only support idle worker groups for now
 				for _, idleGroup := range idleWorkerGroups {
 					if group == idleGroup {
 						logrus.Debugf("Task %d is assigned to worker group %s", task.ID, group)
