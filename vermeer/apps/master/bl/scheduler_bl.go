@@ -40,20 +40,16 @@ type ScheduleBl struct {
 	cronManager *schedules.SchedulerCronManager
 	// start channel for tasks to be started
 	startChan chan *structure.TaskInfo
+	// configurations
+	startChanSize  int
+	tickerInterval int
+	softSchedule   bool
 }
 
 func (s *ScheduleBl) Init() {
 	logrus.Info("Initializing ScheduleBl...")
-	const defaultChanSizeConfig = "10"
-	chanSize := common.GetConfigDefault("start_chan_size", defaultChanSizeConfig).(string)
-	// Convert string to int
-	chanSizeInt, err := strconv.Atoi(chanSize)
-	if err != nil {
-		logrus.Errorf("failed to convert start_chan_size to int: %v", err)
-		logrus.Infof("using default start_chan_size: %s", defaultChanSizeConfig)
-		chanSizeInt, _ = strconv.Atoi(defaultChanSizeConfig)
-	}
-	startChan := make(chan *structure.TaskInfo, chanSizeInt)
+	s.LoadConfig()
+	startChan := make(chan *structure.TaskInfo, s.startChanSize)
 	s.startChan = startChan
 
 	s.resourceManager = &schedules.SchedulerResourceManager{}
@@ -68,10 +64,47 @@ func (s *ScheduleBl) Init() {
 	go s.waitingStartedTask()
 }
 
+func (s *ScheduleBl) LoadConfig() {
+	// Load configuration from common package
+
+	// startChanSize
+	const defaultChanSizeConfig = "10"
+	chanSize := common.GetConfigDefault("start_chan_size", defaultChanSizeConfig).(string)
+	// Convert string to int
+	chanSizeInt, err := strconv.Atoi(chanSize)
+	if err != nil {
+		logrus.Errorf("failed to convert start_chan_size to int: %v", err)
+		logrus.Infof("using default start_chan_size: %s", defaultChanSizeConfig)
+		chanSizeInt, _ = strconv.Atoi(defaultChanSizeConfig)
+	}
+	s.startChanSize = chanSizeInt
+
+	// tickerInterval
+	const defaultTickerInterval = "3"
+	tickerInterval := common.GetConfigDefault("ticker_interval", defaultTickerInterval).(string)
+	tickerIntervalInt, err := strconv.Atoi(tickerInterval)
+	if err != nil {
+		logrus.Errorf("failed to convert ticker_interval to int: %v", err)
+		logrus.Infof("using default ticker_interval: %s", defaultTickerInterval)
+		tickerIntervalInt, _ = strconv.Atoi(defaultTickerInterval)
+	}
+	s.tickerInterval = tickerIntervalInt
+
+	// softSchedule
+	softSchedule := common.GetConfigDefault("soft_schedule", "true").(string)
+	if softSchedule == "true" {
+		s.softSchedule = true
+	} else {
+		s.softSchedule = false
+	}
+
+	logrus.Infof("ScheduleBl configuration: startChanSize=%d, tickerInterval=%d, softSchedule=%v",
+		s.startChanSize, s.tickerInterval, s.softSchedule)
+}
+
 func (s *ScheduleBl) startTicker() {
-	// Create a ticker that triggers every 3 seconds
-	// TODO: make it configurable
-	ticker := time.Tick(3 * time.Second)
+	// Create a ticker with the specified interval
+	ticker := time.Tick(time.Duration(s.tickerInterval) * time.Second)
 
 	for range ticker {
 		logrus.Debug("Ticker ticked")
@@ -87,8 +120,7 @@ func (s *ScheduleBl) TryScheduleNextTasks() {
 		}
 	}()
 
-	// TODO: make it configurable
-	if err := s.tryScheduleInner(true); err != nil {
+	if err := s.tryScheduleInner(s.softSchedule); err != nil {
 		logrus.Errorf("do scheduling error:%v", err)
 	}
 }
