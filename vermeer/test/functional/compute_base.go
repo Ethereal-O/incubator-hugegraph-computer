@@ -97,6 +97,40 @@ func (ctb *ComputeTaskBase) SendComputeReqAsync(params map[string]string) {
 	require.Equal(ctb.t, "complete", taskResp.Task.Status)
 }
 
+func (ctb *ComputeTaskBase) SendComputeReqAsyncBatchPriority(num int, params map[string]string) {
+	//create Compute Task
+	tasks := make([]client.TaskInfo, 0, num)
+	for i := 0; i < num; i++ {
+		params["priority"] = strconv.Itoa(i % 10) // 设置不同的优先级
+		resp, err := ctb.masterHttp.CreateTaskAsync(client.TaskCreateRequest{
+			TaskType:  "compute",
+			GraphName: ctb.graphName,
+			Params:    params,
+		})
+		require.NoError(ctb.t, err)
+		tasks = append(tasks, resp.Task)
+	}
+
+	for i := 0; i < num; i++ {
+		ctb.taskID = int(tasks[i].ID)
+		//若成功启动Compute Task，开始轮询tasksGet，解析response，得到状态为完成时break。
+		var taskResp *client.TaskResponse
+		var err error
+		for i := 0; i < ctb.waitSecond; i++ {
+			ctb.healthCheck.DoHealthCheck()
+			taskResp, err = ctb.masterHttp.GetTask(ctb.taskID)
+			require.NoError(ctb.t, err)
+			if taskResp.Task.Status == "complete" {
+				break
+			}
+			require.NotEqual(ctb.t, "error", taskResp.Task.Status)
+			time.Sleep(1 * time.Second)
+		}
+		require.Equal(ctb.t, "complete", taskResp.Task.Status)
+		fmt.Printf("Compute Task %d completed successfully\n", ctb.taskID)
+	}
+}
+
 // SendComputeReqSync
 //
 //	@Description: 发送Http请求，无需重写,同步请求

@@ -36,6 +36,7 @@ type ComputeTask interface {
 		masterHttp *client.VermeerClient, t *testing.T, healthCheck *HealthCheck)
 	TaskComputeBody() map[string]string
 	SendComputeReqAsync(params map[string]string)
+	SendComputeReqAsyncBatchPriority(num int, params map[string]string)
 	SendComputeReqSync(params map[string]string)
 	LoadComputeRes() ([]interface{}, error)
 	CheckRes()

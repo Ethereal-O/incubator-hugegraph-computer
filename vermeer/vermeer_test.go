@@ -158,7 +158,8 @@ func testAlgorithms(t *testing.T) {
 		taskComputeBody := computeTest.TaskComputeBody()
 		taskComputeBody["output.need_query"] = needQuery
 		if sendType == "async" {
-			computeTest.SendComputeReqAsync(taskComputeBody)
+			// computeTest.SendComputeReqAsync(taskComputeBody)
+			computeTest.SendComputeReqAsyncBatchPriority(10, taskComputeBody) // 异步发送多个请求
 		} else {
 			computeTest.SendComputeReqSync(taskComputeBody)
 		}

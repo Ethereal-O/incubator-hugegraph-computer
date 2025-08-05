@@ -256,7 +256,7 @@ func (p *PriorityElderSchedulerAlgorithm) FilterNextTasks(allTasks []*structure.
 	return allTasks, nil
 }
 
-func (p *PriorityElderSchedulerAlgorithm) CalculateTaskEmergency(task *structure.TaskInfo, taskToWorkerGroupMap map[int32]string) int64 {
+func (p *PriorityElderSchedulerAlgorithm) CalculateTaskEmergency(task *structure.TaskInfo, taskToWorkerGroupMap map[int32]string, printValue bool) int64 {
 	// step 0: get params
 	ageParam := p.ageParam
 	priorityParam := p.priorityParam
@@ -271,7 +271,9 @@ func (p *PriorityElderSchedulerAlgorithm) CalculateTaskEmergency(task *structure
 	resourceCost := resourceParam / max(1, graph.VertexCount+graph.EdgeCount) // Avoid division by zero, ensure at least 1
 	// step 4: some random value
 	randomValue := int64(randomValueParam) // Placeholder for any random value logic
-	logrus.Debugf("Task %d: Age Cost: %d, Priority Cost: %d, Resource Cost: %d, Random Value: %d", task.ID, ageCost, priorityCost, resourceCost, randomValue)
+	if printValue {
+		logrus.Debugf("Task %d: Age Cost: %d, Priority Cost: %d, Resource Cost: %d, Random Value: %d", task.ID, ageCost, priorityCost, resourceCost, randomValue)
+	}
 	return ageCost + priorityCost + resourceCost + randomValue
 }
 
@@ -282,8 +284,12 @@ func (p *PriorityElderSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structur
 
 	// Sort tasks by priority (higher priority first)
 	sort.Slice(allTasks, func(i, j int) bool {
-		return p.CalculateTaskEmergency(allTasks[i], taskToWorkerGroupMap) > p.CalculateTaskEmergency(allTasks[j], taskToWorkerGroupMap)
+		return p.CalculateTaskEmergency(allTasks[i], taskToWorkerGroupMap, false) > p.CalculateTaskEmergency(allTasks[j], taskToWorkerGroupMap, false)
 	})
+
+	for _, task := range allTasks {
+		logrus.Debugf("Task %d: Emergency Value: %d", task.ID, p.CalculateTaskEmergency(task, taskToWorkerGroupMap, true))
+	}
 
 	for _, task := range allTasks {
 		if task.State != structure.TaskStateWaiting {
