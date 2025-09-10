@@ -239,13 +239,10 @@ func QueueExecuteTask(taskInfo *structure.TaskInfo) error {
 }
 
 func QueueExecuteTasks(tasksInfo []*structure.TaskInfo) []error {
-	defer Scheduler.Unlock(Scheduler.Lock())
-	errs := make([]error, 0, len(tasksInfo))
 	for _, task := range tasksInfo {
 		task.CreateType = structure.TaskCreateAsync
-		_, err := Scheduler.QueueTask(task)
-		errs = append(errs, err)
 	}
+	_, errs := Scheduler.BatchQueueTask(tasksInfo)
 	return errs
 }
 

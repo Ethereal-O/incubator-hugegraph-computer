@@ -97,21 +97,34 @@ func (ctb *ComputeTaskBase) SendComputeReqAsync(params map[string]string) {
 	require.Equal(ctb.t, "complete", taskResp.Task.Status)
 }
 
-func (ctb *ComputeTaskBase) SendComputeReqAsyncBatchPriority(num int, params map[string]string) {
+func (ctb *ComputeTaskBase) SendComputeReqAsyncBatchPriority(params []map[string]string) ([]int32, []int32) {
 	//create Compute Task
-	tasks := make([]client.TaskInfo, 0, num)
-	for i := 0; i < num; i++ {
-		params["priority"] = strconv.Itoa(i % 10) // 设置不同的优先级
-		resp, err := ctb.masterHttp.CreateTaskAsync(client.TaskCreateRequest{
+	tasks := make([]client.TaskInfo, 0, len(params))
+	taskIds := make([]int32, 0, len(params))
+	createTasksParams := client.TaskCreateBatchRequest{}
+	for i := 0; i < len(params); i++ {
+		graph := ctb.graphName
+		if params[i]["graph_name"] != "" {
+			graph = params[i]["graph_name"]
+		}
+		createTasksParams = append(createTasksParams, client.TaskCreateRequest{
 			TaskType:  "compute",
-			GraphName: ctb.graphName,
-			Params:    params,
+			GraphName: graph,
+			Params:    params[i],
 		})
-		require.NoError(ctb.t, err)
-		tasks = append(tasks, resp.Task)
+	}
+	resp, err := ctb.masterHttp.CreateTaskBatch(createTasksParams)
+	require.NoError(ctb.t, err)
+
+	for i, r := range *resp {
+		if r.BaseResponse.ErrCode != 0 {
+			ctb.t.Fatalf("create compute task %d failed: %s", i, r.BaseResponse.Message)
+		}
+		tasks = append(tasks, r.Task)
+		taskIds = append(taskIds, r.Task.ID)
 	}
 
-	for i := 0; i < num; i++ {
+	for i := 0; i < len(params); i++ {
 		ctb.taskID = int(tasks[i].ID)
 		//若成功启动Compute Task，开始轮询tasksGet，解析response，得到状态为完成时break。
 		var taskResp *client.TaskResponse
@@ -129,6 +142,16 @@ func (ctb *ComputeTaskBase) SendComputeReqAsyncBatchPriority(num int, params map
 		require.Equal(ctb.t, "complete", taskResp.Task.Status)
 		fmt.Printf("Compute Task %d completed successfully\n", ctb.taskID)
 	}
+
+	response, err := ctb.masterHttp.GetTaskStartSequence(taskIds)
+	require.NoError(ctb.t, err)
+	sequence := response.Sequence
+	for i, id := range sequence {
+		fmt.Printf("Task %d started at position %d in the sequence\n", id, i+1)
+	}
+	require.Equal(ctb.t, len(taskIds), len(sequence))
+
+	return taskIds, sequence
 }
 
 // SendComputeReqSync

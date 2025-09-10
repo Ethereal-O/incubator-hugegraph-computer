@@ -176,7 +176,6 @@ func (s *ScheduleBl) tryScheduleInner(softSchedule bool) error {
 }
 
 // QueueTask Add the task to the inner queue.
-// The tasks will be executed in order from the queue.
 // If the task exists, return false.
 func (s *ScheduleBl) QueueTask(taskInfo *structure.TaskInfo) (bool, error) {
 	if taskInfo == nil {
@@ -191,6 +190,8 @@ func (s *ScheduleBl) QueueTask(taskInfo *structure.TaskInfo) (bool, error) {
 	if err := taskMgr.SetState(taskInfo, structure.TaskStateWaiting); err != nil {
 		return false, err
 	}
+
+	logrus.Debugf("queuing task %d with parameters: %+v", taskInfo.ID, taskInfo)
 
 	// Notice: Ensure successful invocation.
 	// make sure all tasks have alloc to a worker group
@@ -209,6 +210,31 @@ func (s *ScheduleBl) QueueTask(taskInfo *structure.TaskInfo) (bool, error) {
 	}
 
 	return ok, nil
+}
+
+func (s *ScheduleBl) BatchQueueTask(taskInfos []*structure.TaskInfo) ([]bool, []error) {
+	if len(taskInfos) == 0 {
+		return []bool{}, []error{}
+	}
+
+	s.PauseDispatch()
+
+	defer s.ResumeDispatch()
+	defer s.Unlock(s.Lock())
+
+	errors := make([]error, len(taskInfos))
+	oks := make([]bool, len(taskInfos))
+
+	for _, taskInfo := range taskInfos {
+		ok, err := s.QueueTask(taskInfo)
+		if err != nil {
+			logrus.Errorf("failed to queue task '%d': %v", taskInfo.ID, err)
+			errors = append(errors, err)
+		}
+		oks = append(oks, ok)
+	}
+
+	return oks, errors
 }
 
 // ******** CloseCurrent ********
@@ -317,6 +343,12 @@ func (s *ScheduleBl) startWaitingTask(agent *schedules.Agent, taskInfo *structur
 
 	taskInfo.StartTime = time.Now()
 	err = taskStarter.StartTask()
+
+	// only for test or debug, record the task start sequence
+	if err := s.taskManager.AddTaskStartSequence(taskInfo.ID); err != nil {
+		logrus.Errorf("failed to add task '%d' to start sequence: %v", taskInfo.ID, err)
+	}
+
 	if err != nil {
 		logrus.Errorf("failed to start a task, type: %s, taskID: %d, caused by: %v", taskInfo.Type, taskInfo.ID, err)
 		taskMgr.SetError(taskInfo, err.Error())
@@ -405,4 +437,9 @@ func (s *ScheduleBl) AllTasksInQueue() []*structure.TaskInfo {
 func (s *ScheduleBl) TasksInQueue(space string) []*structure.TaskInfo {
 	// Implement logic to get tasks in the queue for a specific space
 	return s.taskManager.GetTasksInQueue(space)
+}
+
+func (s *ScheduleBl) TaskStartSequence(queryTasks []int32) []*structure.TaskInfo {
+	// Only for debug or test, get task start sequence
+	return s.taskManager.GetTaskStartSequence(queryTasks)
 }
