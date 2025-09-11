@@ -150,6 +150,26 @@ func (vc *VermeerClient) GetWorkers() (*WorkersResponse, error) {
 	return workersResp, err
 }
 
+func (vc *VermeerClient) AllocGroupGraph(graphName string, groupName string) (bool, error) {
+	reader, err := Request2Reader(struct{}{})
+	if err != nil {
+		return false, err
+	}
+	resp, err := vc.post(vc.httpAddr+"/admin/workers/alloc/"+groupName+"/$DEFAULT/"+graphName, reader)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		respByte, err := ParseResponse2Byte(resp)
+		if err != nil {
+			return false, err
+		}
+		return false, fmt.Errorf("response:%s", string(respByte))
+	}
+	return true, nil
+}
+
 func (vc *VermeerClient) GetMaster() (*MasterResponse, error) {
 	resp, err := vc.get(vc.httpAddr + "/master")
 	if err != nil {

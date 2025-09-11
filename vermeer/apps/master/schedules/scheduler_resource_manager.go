@@ -82,7 +82,7 @@ func (rm *SchedulerResourceManager) GetAgentAndAssignTask(taskInfo *structure.Ta
 
 	defer rm.Unlock(rm.Lock())
 
-	agent, status, workers, err := rm.broker.ApplyAgent(taskInfo)
+	agent, status, workers, err := rm.broker.ApplyAgent(taskInfo, !taskInfo.Exclusive)
 	if err != nil {
 		return nil, AgentStatusError, err
 	}
@@ -93,8 +93,9 @@ func (rm *SchedulerResourceManager) GetAgentAndAssignTask(taskInfo *structure.Ta
 	// Assign the task to the agent
 	agent.AssignTask(taskInfo)
 
+	exclusive := taskInfo.Exclusive
 	runningStatus := WorkerOngoingStatusRunning
-	if _, exists := rm.runningWorkerGroupTasks[agent.GroupName()]; !exists {
+	if _, exists := rm.runningWorkerGroupTasks[agent.GroupName()]; !exists && exclusive {
 		rm.runningWorkerGroupTasks[agent.GroupName()] = []int32{}
 		runningStatus = WorkerOngoingStatusRunning
 		rm.workerGroupStatus[agent.GroupName()] = runningStatus

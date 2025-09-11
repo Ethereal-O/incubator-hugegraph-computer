@@ -32,8 +32,8 @@ func (am *SchedulerAlgorithmManager) Init() {
 	am.schuduledSchedulerAlgorithms = make(map[string]SchedulerAlgorithm)
 	am.dispatchPaused = false
 	// Register filter and schedule algorithms
-	am.RegisterFilterAlgorithm(&WaitingSchedulerAlgorithm{})
 	am.RegisterFilterAlgorithm(&DependsSchedulerAlgorithm{})
+	am.RegisterFilterAlgorithm(&WaitingSchedulerAlgorithm{})
 	// Register default SchedulerAlgorithms
 	am.RegisterSchedulerAlgorithm(&PriorityElderSchedulerAlgorithm{})
 }
@@ -383,9 +383,9 @@ func (d *DependsSchedulerAlgorithm) FilterNextTasks(allTasks []*structure.TaskIn
 		return allTasks[i].ID < allTasks[j].ID
 	})
 
-	waitingTaskIDs := make(map[int32]*structure.TaskInfo)
+	taskIDs := make(map[int32]*structure.TaskInfo)
 	for _, task := range allTasks {
-		waitingTaskIDs[task.ID] = task
+		taskIDs[task.ID] = task
 	}
 
 	filteredTasks := make([]*structure.TaskInfo, 0)
@@ -394,7 +394,7 @@ func (d *DependsSchedulerAlgorithm) FilterNextTasks(allTasks []*structure.TaskIn
 		// Check if all dependencies are satisfied
 		allDepsSatisfied := true
 		for _, dep := range depends {
-			if depTask, exists := waitingTaskIDs[dep]; !exists || depTask.State != structure.TaskStateWaiting {
+			if depTask, exists := taskIDs[dep]; exists && depTask.State != structure.TaskStateComplete {
 				allDepsSatisfied = false
 				break
 			}

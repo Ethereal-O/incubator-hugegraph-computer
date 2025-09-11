@@ -97,6 +97,17 @@ func (ctb *ComputeTaskBase) SendComputeReqAsync(params map[string]string) {
 	require.Equal(ctb.t, "complete", taskResp.Task.Status)
 }
 
+func (ctb *ComputeTaskBase) SendComputeReqAsyncNotWait(params map[string]string) int32 {
+	//create Compute Task
+	resp, err := ctb.masterHttp.CreateTaskAsync(client.TaskCreateRequest{
+		TaskType:  "compute",
+		GraphName: ctb.graphName,
+		Params:    params,
+	})
+	require.NoError(ctb.t, err)
+	return int32(resp.Task.ID)
+}
+
 func (ctb *ComputeTaskBase) SendComputeReqAsyncBatchPriority(params []map[string]string) ([]int32, []int32) {
 	//create Compute Task
 	tasks := make([]client.TaskInfo, 0, len(params))

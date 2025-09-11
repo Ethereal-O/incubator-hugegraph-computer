@@ -93,6 +93,9 @@ func (tb *TaskBl) CreateTaskInfo(
 				logrus.Warnf("exclusive convert to bool error:%v", err)
 			}
 		}
+		if cronExpr, ok := params["cron_expr"]; ok {
+			taskInfo.CronExpr = cronExpr
+		}
 	}
 
 	return taskInfo, nil
