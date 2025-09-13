@@ -27,6 +27,7 @@ func (t *SchedulerCronManager) CheckCronExpression(cronExpr string) error {
 		return errors.New("cron expression is empty")
 	}
 	if _, err := cron.ParseStandard(cronExpr); err != nil {
+		logrus.Errorf("Failed to parse cron expression: %v", err)
 		return errors.New("invalid cron expression: " + err.Error())
 	}
 	return nil
@@ -41,22 +42,44 @@ func (t *SchedulerCronManager) AddCronTask(taskInfo *structure.TaskInfo) error {
 		return errors.New("the property `CronExpr` of taskInfo is empty")
 	}
 
+	// add to cron tasks
 	t.cronTasks[taskInfo.ID] = append(t.cronTasks[taskInfo.ID], taskInfo)
 	cronJob := cron.New()
 	_, err := cronJob.AddFunc(taskInfo.CronExpr, func() {
 		if taskInfo == nil {
 			return
 		}
-		if _, err := t.queueHandler(taskInfo); err != nil {
+
+		// TODO: CREATE a new task from the original task, using taskbl
+		// copy a new taskInfo
+		task, err := structure.TaskManager.CreateTask(taskInfo.SpaceName, taskInfo.Type, 0)
+		task.CreateType = structure.TaskCreateAsync
+		task.GraphName = taskInfo.GraphName
+		task.CreateUser = taskInfo.CreateUser
+		task.Params = taskInfo.Params
+		task.CronExpr = "" // clear cron expression for the new task
+		task.Priority = taskInfo.Priority
+		task.Preorders = taskInfo.Preorders
+		task.Exclusive = taskInfo.Exclusive
+		if err != nil {
+			logrus.Errorf("Failed to create task from cron job for task %d: %v", taskInfo.ID, err)
+			return
+		}
+		structure.TaskManager.AddTask(task)
+		structure.TaskManager.SaveTask(task.ID)
+		if _, err := t.queueHandler(task); err != nil {
 			logrus.Errorf("Failed to queue task %d in cron job: %v", taskInfo.ID, err)
 			return
 		}
+		logrus.Infof("Successfully queued task %d from cron job", task.ID)
 	})
 	if err != nil {
 		logrus.Errorf("Failed to add cron job for task %d: %v", taskInfo.ID, err)
 		return err
 	}
 	t.crons[taskInfo.ID] = append(t.crons[taskInfo.ID], cronJob)
+	cronJob.Start()
+	logrus.Infof("Added cron task for task ID %d with expression %s", taskInfo.ID, taskInfo.CronExpr)
 	return nil
 }
 
@@ -71,5 +94,30 @@ func (t *SchedulerCronManager) DeleteTask(taskID int32) error {
 	delete(t.cronTasks, taskID)
 	delete(t.crons, taskID)
 	logrus.Infof("Deleted cron task for task ID %d", taskID)
+	return nil
+}
+
+func (t *SchedulerCronManager) DeleteTaskByGraph(spaceName, graphName string) error {
+	if spaceName == "" || graphName == "" {
+		return errors.New("the argument `spaceName` or `graphName` is empty")
+	}
+
+	var toDelete []int32
+	for taskID, tasks := range t.cronTasks {
+		for _, task := range tasks {
+			if task.SpaceName == spaceName && task.GraphName == graphName {
+				toDelete = append(toDelete, taskID)
+				break
+			}
+		}
+	}
+
+	for _, taskID := range toDelete {
+		if err := t.DeleteTask(taskID); err != nil {
+			logrus.Errorf("Failed to delete cron task for task ID %d: %v", taskID, err)
+			return err
+		}
+	}
+	logrus.Infof("Deleted cron tasks for space %s and graph %s", spaceName, graphName)
 	return nil
 }

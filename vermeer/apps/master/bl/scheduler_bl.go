@@ -244,10 +244,11 @@ func (s *ScheduleBl) CloseCurrent(taskId int32, removeWorkerName ...string) erro
 	s.taskManager.RemoveTask(taskId)
 	// release the worker group
 	s.resourceManager.ReleaseByTaskID(taskId)
-	// stop the cron job if exists
-	s.cronManager.DeleteTask(taskId)
 
 	if len(removeWorkerName) > 0 {
+		// stop the cron job if exists
+		s.cronManager.DeleteTask(taskId)
+		// remove the worker from resource manager
 		workerName := removeWorkerName[0]
 		if workerName == "" {
 			return errors.New("the argument `removeWorkerName` is empty")
@@ -404,6 +405,16 @@ func (s *ScheduleBl) handleCancelTask(taskInfo *structure.TaskInfo) error {
 
 	// set worker state to idle or concurrent running
 	s.resourceManager.ReleaseByTaskID(taskInfo.ID)
+
+	return nil
+}
+
+func (s *ScheduleBl) CancelCronTask(taskInfo *structure.TaskInfo) error {
+	if taskInfo == nil {
+		return errors.New("the argument `taskInfo` is nil")
+	}
+
+	s.cronManager.DeleteTask(taskInfo.ID)
 
 	return nil
 }

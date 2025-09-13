@@ -182,6 +182,9 @@ func (tb *TaskBl) CancelTask(taskID int32) error {
 		return fmt.Errorf("cannot cancel the task with id '%v' as it was not created by you", taskID)
 	}
 
+	// stop the cron job if exists
+	Scheduler.CancelCronTask(task)
+
 	if task.State == structure.TaskStateCanceled {
 		return fmt.Errorf("task had been in state canceled")
 	}

@@ -86,6 +86,7 @@ func SubTestConcurrent(t *testing.T, expectRes *functional.ExpectRes, healthChec
 
 	// send two tasks with different size
 	params := make([]map[string]string, 0)
+	// default is false, actually do not need to set
 	taskComputeBody["exclusive"] = "false"
 	params = append(params, taskComputeBody)
 	params = append(params, taskComputeBody)
