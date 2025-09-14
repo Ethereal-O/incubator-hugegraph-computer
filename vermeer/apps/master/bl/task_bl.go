@@ -68,6 +68,7 @@ func (tb *TaskBl) CreateTaskInfo(
 	taskInfo.Priority = 0
 	taskInfo.Preorders = make([]int32, 0)
 	taskInfo.Exclusive = false // default to false, can be set to true if needed
+	// taskInfo.Exclusive = true
 	if params != nil {
 		if priority, ok := params["priority"]; ok {
 			if p, err := strconv.Atoi(priority); err == nil {

@@ -146,34 +146,34 @@ func SubTestDepends(t *testing.T, expectRes *functional.ExpectRes, healthCheck *
 func TestPriority(t *testing.T, expectRes *functional.ExpectRes, healthCheck *functional.HealthCheck, masterHttp *client.VermeerClient, graphName []string, factor string, waitSecond int) {
 	fmt.Print("start test priority\n")
 
-	// // for scheduler, just test a simple task
-	// var computeTask = "pagerank"
+	// for scheduler, just test a simple task
+	var computeTask = "pagerank"
 
-	// // TEST GROUP: PRIORITY
-	// // 1. send priority tasks to single graph
-	// // expect: the tasks should be executed in order of priority
+	// TEST GROUP: PRIORITY
+	// 1. send priority tasks to single graph
+	// expect: the tasks should be executed in order of priority
 
-	// SubTestPriority(t, expectRes, healthCheck, masterHttp, graphName, computeTask, waitSecond)
+	SubTestPriority(t, expectRes, healthCheck, masterHttp, graphName, computeTask, waitSecond)
 
-	// // 2. send small tasks and large tasks to single graph
-	// // expect: the small tasks should be executed first
+	// 2. send small tasks and large tasks to single graph
+	// expect: the small tasks should be executed first
 
-	// SubTestSmall(t, expectRes, healthCheck, masterHttp, graphName, computeTask, waitSecond)
+	SubTestSmall(t, expectRes, healthCheck, masterHttp, graphName, computeTask, waitSecond)
 
-	// // 3. send support concurrent tasks to single graph
-	// // expect: the tasks should be executed concurrently
-	// SubTestConcurrent(t, expectRes, healthCheck, masterHttp, graphName, computeTask, waitSecond)
+	// 3. send support concurrent tasks to single graph
+	// expect: the tasks should be executed concurrently
+	SubTestConcurrent(t, expectRes, healthCheck, masterHttp, graphName, computeTask, waitSecond)
 
-	// // 4. send dependency-tasks to single graph
-	// // expect: the tasks should be executed in order of dependency
+	// 4. send dependency-tasks to single graph
+	// expect: the tasks should be executed in order of dependency
 
-	// SubTestDepends(t, expectRes, healthCheck, masterHttp, graphName, computeTask, waitSecond)
+	SubTestDepends(t, expectRes, healthCheck, masterHttp, graphName, computeTask, waitSecond)
 
-	// // 5. send same priority tasks to single graph
-	// // expect: the tasks should be executed in order of time
-	// // skipped, too fragile
+	// 5. send same priority tasks to single graph
+	// expect: the tasks should be executed in order of time
+	// skipped, too fragile
 
-	// // 6. send tasks to different graphs
-	// // expect: the tasks should be executed concurrently
-	// // have been tested in SubTestSmall and SubTestDepends
+	// 6. send tasks to different graphs
+	// expect: the tasks should be executed concurrently
+	// have been tested in SubTestSmall and SubTestDepends
 }

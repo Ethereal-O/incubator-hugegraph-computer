@@ -11,14 +11,14 @@ import (
 type SchedulerCronManager struct {
 	cronTasks map[int32][]*structure.TaskInfo // cron expression to TaskInfo. Origin task ID to copied tasks
 	crons     map[int32][]*cron.Cron          // cron expression to cron jobs
-	// queueHandler is a function that handles the task queue
-	queueHandler func(*structure.TaskInfo) (bool, error)
+	// queueTemplateHandler is a function that handles the task queue
+	queueTemplateHandler func(*structure.TaskInfo) (int32, error)
 }
 
-func (t *SchedulerCronManager) Init(queueHandler func(*structure.TaskInfo) (bool, error)) *SchedulerCronManager {
+func (t *SchedulerCronManager) Init(queueTemplateHandler func(*structure.TaskInfo) (int32, error)) *SchedulerCronManager {
 	t.cronTasks = make(map[int32][]*structure.TaskInfo)
 	t.crons = make(map[int32][]*cron.Cron)
-	t.queueHandler = queueHandler
+	t.queueTemplateHandler = queueTemplateHandler
 	return t
 }
 
@@ -50,28 +50,14 @@ func (t *SchedulerCronManager) AddCronTask(taskInfo *structure.TaskInfo) error {
 			return
 		}
 
-		// TODO: CREATE a new task from the original task, using taskbl
+		// CREATE a new task from the original task, using taskbl, it is handled in queueTemplateHandler
 		// copy a new taskInfo
-		task, err := structure.TaskManager.CreateTask(taskInfo.SpaceName, taskInfo.Type, 0)
-		task.CreateType = structure.TaskCreateAsync
-		task.GraphName = taskInfo.GraphName
-		task.CreateUser = taskInfo.CreateUser
-		task.Params = taskInfo.Params
-		task.CronExpr = "" // clear cron expression for the new task
-		task.Priority = taskInfo.Priority
-		task.Preorders = taskInfo.Preorders
-		task.Exclusive = taskInfo.Exclusive
+		newID, err := t.queueTemplateHandler(taskInfo)
 		if err != nil {
-			logrus.Errorf("Failed to create task from cron job for task %d: %v", taskInfo.ID, err)
-			return
-		}
-		structure.TaskManager.AddTask(task)
-		structure.TaskManager.SaveTask(task.ID)
-		if _, err := t.queueHandler(task); err != nil {
 			logrus.Errorf("Failed to queue task %d in cron job: %v", taskInfo.ID, err)
 			return
 		}
-		logrus.Infof("Successfully queued task %d from cron job", task.ID)
+		logrus.Infof("Successfully queued task %d from cron job", newID)
 	})
 	if err != nil {
 		logrus.Errorf("Failed to add cron job for task %d: %v", taskInfo.ID, err)

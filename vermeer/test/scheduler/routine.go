@@ -30,6 +30,14 @@ func SubTestRoutine(t *testing.T, expectRes *functional.ExpectRes, healthCheck *
 	// wait for a while and check again
 	time.Sleep(2 * time.Minute)
 
+	// check if deployed
+	queue := []int32{}
+	queue = append(queue, int32(taskid+1))
+	result, err := masterHttp.GetTaskStartSequence(queue)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.Sequence))
+	require.Greater(t, result.Sequence[0], int32(0))
+
 	masterHttp.GetTaskCancel(int(taskid))
 
 	fmt.Printf("Test Routine: %-30s [OK], cost: %v\n", computeTask, time.Since(bTime))

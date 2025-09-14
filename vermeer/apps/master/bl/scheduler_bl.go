@@ -59,7 +59,7 @@ func (s *ScheduleBl) Init() {
 	s.algorithmManager = &schedules.SchedulerAlgorithmManager{}
 	s.algorithmManager.Init()
 	s.cronManager = &schedules.SchedulerCronManager{}
-	s.cronManager.Init(s.QueueTask)
+	s.cronManager.Init(s.QueueTaskFromTemplate)
 	go s.startTicker()
 	go s.waitingStartedTask()
 }
@@ -186,7 +186,7 @@ func (s *ScheduleBl) QueueTask(taskInfo *structure.TaskInfo) (bool, error) {
 		return false, errors.New("the property `SpaceName` of taskInfo is empty")
 	}
 
-	//defer s.Unlock(s.Lock())
+	defer s.Unlock(s.Lock())
 	if err := taskMgr.SetState(taskInfo, structure.TaskStateWaiting); err != nil {
 		return false, err
 	}
@@ -212,6 +212,30 @@ func (s *ScheduleBl) QueueTask(taskInfo *structure.TaskInfo) (bool, error) {
 	return ok, nil
 }
 
+func (s *ScheduleBl) QueueTaskFromTemplate(template *structure.TaskInfo) (int32, error) {
+	if template == nil {
+		return -1, errors.New("the argument `template` is nil")
+	}
+
+	bc := &baseCreator{}
+	taskInfo, err := bc.CopyTaskInfo(template)
+	if err != nil {
+		logrus.Errorf("failed to copy task info from template, template ID: %d, caused by: %v", template.ID, err)
+		return -1, err
+	}
+	bc.saveTaskInfo(taskInfo)
+
+	ok, err := s.QueueTask(taskInfo)
+	if err != nil || !ok {
+		logrus.Errorf("failed to queue task from template, template ID: %d, caused by: %v", template.ID, err)
+		return -1, err
+	}
+
+	logrus.Infof("queued task '%d' from template '%d'", taskInfo.ID, template.ID)
+
+	return taskInfo.ID, nil
+}
+
 func (s *ScheduleBl) BatchQueueTask(taskInfos []*structure.TaskInfo) ([]bool, []error) {
 	if len(taskInfos) == 0 {
 		return []bool{}, []error{}
@@ -220,7 +244,7 @@ func (s *ScheduleBl) BatchQueueTask(taskInfos []*structure.TaskInfo) ([]bool, []
 	s.PauseDispatch()
 
 	defer s.ResumeDispatch()
-	defer s.Unlock(s.Lock())
+	// defer s.Unlock(s.Lock())
 
 	errors := make([]error, len(taskInfos))
 	oks := make([]bool, len(taskInfos))
@@ -246,7 +270,7 @@ func (s *ScheduleBl) CloseCurrent(taskId int32, removeWorkerName ...string) erro
 	s.resourceManager.ReleaseByTaskID(taskId)
 
 	if len(removeWorkerName) > 0 {
-		// stop the cron job if exists
+		// stop the cron job if exists when need remove worker, otherwise the task is just closed normally
 		s.cronManager.DeleteTask(taskId)
 		// remove the worker from resource manager
 		workerName := removeWorkerName[0]
