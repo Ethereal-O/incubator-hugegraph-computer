@@ -47,6 +47,8 @@ func (lt *LoadTaskLocal) TaskLoadBody() map[string]string {
 	}
 }
 
+// TaskLoadBodyWithNum creates load configuration with specified number of files.
+// If num <= 10, it will be automatically adjusted to 30 to ensure minimum test coverage.
 func (lt *LoadTaskLocal) TaskLoadBodyWithNum(num int) map[string]string {
 	vertexBackends := []string{"db", "mem"}
 

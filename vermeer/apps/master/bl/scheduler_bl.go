@@ -113,22 +113,24 @@ func (s *ScheduleBl) startTicker() {
 }
 
 // this make scheduler manager try to schedule next tasks
-func (s *ScheduleBl) TryScheduleNextTasks() {
+func (s *ScheduleBl) TryScheduleNextTasks(noLock ...bool) {
 	defer func() {
 		if err := recover(); err != nil {
 			logrus.Errorln("TryScheduleNextTasks() has been recovered:", err)
 		}
 	}()
 
-	if err := s.tryScheduleInner(s.softSchedule); err != nil {
+	if err := s.tryScheduleInner(s.softSchedule, noLock...); err != nil {
 		logrus.Errorf("do scheduling error:%v", err)
 	}
 }
 
 // Main routine to schedule tasks
-func (s *ScheduleBl) tryScheduleInner(softSchedule bool) error {
+func (s *ScheduleBl) tryScheduleInner(softSchedule bool, noLock ...bool) error {
 	// Implement logic to get the next task in the queue for the given space
-	defer s.Unlock(s.Lock())
+	if !(len(noLock) > 0 && noLock[0]) {
+		defer s.Unlock(s.Lock())
+	}
 
 	// step 1: make sure all tasks have alloc to a worker group
 	// This is done by the TaskManager, which assigns a worker group to each task
@@ -264,6 +266,8 @@ func (s *ScheduleBl) BatchQueueTask(taskInfos []*structure.TaskInfo) ([]bool, []
 // ******** CloseCurrent ********
 
 func (s *ScheduleBl) CloseCurrent(taskId int32, removeWorkerName ...string) error {
+	defer s.Unlock(s.Lock())
+
 	// trace tasks need these workers, check if these tasks are available
 	s.taskManager.RemoveTask(taskId)
 	// release the worker group
@@ -282,16 +286,19 @@ func (s *ScheduleBl) CloseCurrent(taskId int32, removeWorkerName ...string) erro
 	}
 
 	logrus.Infof("invoke dispatch when task '%d' is closed", taskId)
-	s.TryScheduleNextTasks()
+	s.TryScheduleNextTasks(true)
 	return nil
 }
 
-func (s *ScheduleBl) ChangeWorkerStatus(workerName string, status schedules.WorkerOngoingStatus) {
+func (s *ScheduleBl) ChangeWorkerStatus(workerName string, status schedules.WorkerOngoingStatus) (bool, error) {
+	defer s.Unlock(s.Lock())
 	s.resourceManager.ChangeWorkerStatus(workerName, status)
 
 	logrus.Infof("worker '%s' status changed to '%s'", workerName, status)
 	// After changing the worker status, we may need to reschedule tasks
-	s.TryScheduleNextTasks()
+	s.TryScheduleNextTasks(true)
+
+	return true, nil
 }
 
 // ******** START TASK ********
@@ -299,7 +306,7 @@ func (s *ScheduleBl) waitingStartedTask() {
 	for taskInfo := range s.startChan {
 		if taskInfo == nil {
 			logrus.Warnf("recieved a nil task from startChan")
-			return
+			continue
 		}
 
 		logrus.Infof("chan received task '%d' to start", taskInfo.ID)
@@ -387,6 +394,8 @@ func (s *ScheduleBl) CancelTask(taskInfo *structure.TaskInfo) error {
 	if taskInfo == nil {
 		return errors.New("the argument `taskInfo` is nil")
 	}
+
+	defer s.Unlock(s.Lock())
 
 	isHeadTask := s.taskManager.IsTaskOngoing(taskInfo.ID)
 	task := s.taskManager.RemoveTask(taskInfo.ID)

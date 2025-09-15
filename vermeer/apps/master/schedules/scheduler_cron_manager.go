@@ -43,7 +43,6 @@ func (t *SchedulerCronManager) AddCronTask(taskInfo *structure.TaskInfo) error {
 	}
 
 	// add to cron tasks
-	t.cronTasks[taskInfo.ID] = append(t.cronTasks[taskInfo.ID], taskInfo)
 	cronJob := cron.New()
 	_, err := cronJob.AddFunc(taskInfo.CronExpr, func() {
 		if taskInfo == nil {
@@ -63,6 +62,7 @@ func (t *SchedulerCronManager) AddCronTask(taskInfo *structure.TaskInfo) error {
 		logrus.Errorf("Failed to add cron job for task %d: %v", taskInfo.ID, err)
 		return err
 	}
+	t.cronTasks[taskInfo.ID] = append(t.cronTasks[taskInfo.ID], taskInfo)
 	t.crons[taskInfo.ID] = append(t.crons[taskInfo.ID], cronJob)
 	cronJob.Start()
 	logrus.Infof("Added cron task for task ID %d with expression %s", taskInfo.ID, taskInfo.CronExpr)

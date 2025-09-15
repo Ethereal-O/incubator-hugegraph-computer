@@ -71,7 +71,7 @@ func (tb *TaskBl) CreateTaskInfo(
 	// taskInfo.Exclusive = true
 	if params != nil {
 		if priority, ok := params["priority"]; ok {
-			if p, err := strconv.Atoi(priority); err == nil {
+			if p, err := strconv.ParseInt(priority, 10, 32); err == nil {
 				taskInfo.Priority = int32(p)
 			} else {
 				logrus.Warnf("priority convert to int32 error:%v", err)
@@ -80,7 +80,7 @@ func (tb *TaskBl) CreateTaskInfo(
 		if preorders, ok := params["preorders"]; ok {
 			preorderList := strings.Split(preorders, ",")
 			for _, preorder := range preorderList {
-				if pid, err := strconv.Atoi(preorder); err == nil {
+				if pid, err := strconv.ParseInt(preorder, 10, 32); err == nil {
 					taskInfo.Preorders = append(taskInfo.Preorders, int32(pid))
 				} else {
 					logrus.Warnf("preorder convert to int32 error:%v", err)

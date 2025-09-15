@@ -1,6 +1,7 @@
 package schedules
 
 import (
+	"slices"
 	"sort"
 	"strconv"
 	"time"
@@ -23,13 +24,13 @@ type SchedulerAlgorithm interface {
 
 type SchedulerAlgorithmManager struct {
 	filteredSchedulerAlgorithms  map[string]SchedulerAlgorithm
-	schuduledSchedulerAlgorithms map[string]SchedulerAlgorithm
+	scheduledSchedulerAlgorithms map[string]SchedulerAlgorithm
 	dispatchPaused               bool
 }
 
 func (am *SchedulerAlgorithmManager) Init() {
 	am.filteredSchedulerAlgorithms = make(map[string]SchedulerAlgorithm)
-	am.schuduledSchedulerAlgorithms = make(map[string]SchedulerAlgorithm)
+	am.scheduledSchedulerAlgorithms = make(map[string]SchedulerAlgorithm)
 	am.dispatchPaused = false
 	// Register filter and schedule algorithms
 	am.RegisterFilterAlgorithm(&DependsSchedulerAlgorithm{})
@@ -38,33 +39,33 @@ func (am *SchedulerAlgorithmManager) Init() {
 	am.RegisterSchedulerAlgorithm(&PriorityElderSchedulerAlgorithm{})
 }
 
-func (am *SchedulerAlgorithmManager) RegisterSchedulerAlgorithm(SchedulerAlgorithm SchedulerAlgorithm) {
-	if SchedulerAlgorithm == nil {
+func (am *SchedulerAlgorithmManager) RegisterSchedulerAlgorithm(schedulerAlgorithm SchedulerAlgorithm) {
+	if schedulerAlgorithm == nil {
 		return
 	}
-	name := SchedulerAlgorithm.Name()
-	if _, exists := am.schuduledSchedulerAlgorithms[name]; exists {
+	name := schedulerAlgorithm.Name()
+	if _, exists := am.scheduledSchedulerAlgorithms[name]; exists {
 		return // SchedulerAlgorithm already registered
 	}
 
 	// only support one scheduling algorithm for now
-	if len(am.schuduledSchedulerAlgorithms) > 0 {
+	if len(am.scheduledSchedulerAlgorithms) > 0 {
 		return // Only one scheduling algorithm can be registered
 	}
-	SchedulerAlgorithm.Init()
-	am.schuduledSchedulerAlgorithms[name] = SchedulerAlgorithm
+	schedulerAlgorithm.Init()
+	am.scheduledSchedulerAlgorithms[name] = schedulerAlgorithm
 }
 
-func (am *SchedulerAlgorithmManager) RegisterFilterAlgorithm(FilterAlgorithm SchedulerAlgorithm) {
-	if FilterAlgorithm == nil {
+func (am *SchedulerAlgorithmManager) RegisterFilterAlgorithm(filterAlgorithm SchedulerAlgorithm) {
+	if filterAlgorithm == nil {
 		return
 	}
-	name := FilterAlgorithm.Name()
+	name := filterAlgorithm.Name()
 	if _, exists := am.filteredSchedulerAlgorithms[name]; exists {
 		return // SchedulerAlgorithm already registered
 	}
-	FilterAlgorithm.Init()
-	am.filteredSchedulerAlgorithms[name] = FilterAlgorithm
+	filterAlgorithm.Init()
+	am.filteredSchedulerAlgorithms[name] = filterAlgorithm
 }
 
 func (am *SchedulerAlgorithmManager) IsDispatchPaused() bool {
@@ -98,7 +99,7 @@ func (am *SchedulerAlgorithmManager) ScheduleNextTasks(allTasks []*structure.Tas
 
 	// only support one scheduling algorithm for now
 	// get first algorithm
-	for _, algorithm := range am.schuduledSchedulerAlgorithms {
+	for _, algorithm := range am.scheduledSchedulerAlgorithms {
 		tasks, err := algorithm.ScheduleNextTasks(filteredTasks, taskToWorkerGroupMap, idleWorkerGroups, concurrentWorkerGroups, softSchedule)
 		if err != nil {
 			return nil, err
@@ -268,7 +269,12 @@ func (p *PriorityElderSchedulerAlgorithm) CalculateTaskEmergency(task *structure
 	priorityCost := priorityParam * int64(task.Priority)
 	// step 3: resource cost
 	graph := structure.GraphManager.GetGraphByName(task.SpaceName, task.GraphName)
-	resourceCost := resourceParam / max(1, graph.VertexCount+graph.EdgeCount) // Avoid division by zero, ensure at least 1
+	resourceCost := int64(0)
+	if graph == nil {
+		resourceCost = resourceParam // if graph not found, use max resource cost
+	} else {
+		resourceCost = resourceParam / max(1, graph.VertexCount+graph.EdgeCount) // Avoid division by zero, ensure at least 1
+	}
 	// step 4: some random value
 	randomValue := int64(randomValueParam) // Placeholder for any random value logic
 	if printValue {
@@ -282,13 +288,19 @@ func (p *PriorityElderSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structur
 		return nil, nil // No tasks to schedule
 	}
 
+	// calculate emergency value for each task
+	taskEmergencies := make(map[int32]int64)
+	for _, task := range allTasks {
+		taskEmergencies[task.ID] = p.CalculateTaskEmergency(task, taskToWorkerGroupMap, false)
+	}
+
 	// Sort tasks by priority (higher priority first)
 	sort.Slice(allTasks, func(i, j int) bool {
-		return p.CalculateTaskEmergency(allTasks[i], taskToWorkerGroupMap, false) > p.CalculateTaskEmergency(allTasks[j], taskToWorkerGroupMap, false)
+		return taskEmergencies[allTasks[i].ID] > taskEmergencies[allTasks[j].ID]
 	})
 
 	for _, task := range allTasks {
-		logrus.Debugf("Task %d: Emergency Value: %d", task.ID, p.CalculateTaskEmergency(task, taskToWorkerGroupMap, true))
+		logrus.Debugf("Task %d: Emergency Value: %d", task.ID, taskEmergencies[task.ID])
 	}
 
 	for _, task := range allTasks {
@@ -427,7 +439,7 @@ func (d *DependsSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.Task
 		// Check if all dependencies are satisfied
 		allDepsSatisfied := true
 		for _, dep := range depends {
-			if depTask, exists := allTaskIDs[dep]; !exists || depTask.State != structure.TaskStateWaiting {
+			if depTask, exists := allTaskIDs[dep]; exists && depTask.State != structure.TaskStateComplete {
 				allDepsSatisfied = false
 				break
 			}
@@ -435,11 +447,9 @@ func (d *DependsSchedulerAlgorithm) ScheduleNextTasks(allTasks []*structure.Task
 		if allDepsSatisfied {
 			if group, exists := taskToWorkerGroupMap[task.ID]; exists && group != "" {
 				// only support idle worker groups for now
-				for _, idleGroup := range idleWorkerGroups {
-					if group == idleGroup {
-						logrus.Debugf("Task %d is assigned to worker group %s", task.ID, group)
-						return []*structure.TaskInfo{task}, nil // Return the first task that can be scheduled
-					}
+				if slices.Contains(idleWorkerGroups, group) {
+					logrus.Debugf("Task %d is assigned to worker group %s", task.ID, group)
+					return []*structure.TaskInfo{task}, nil // Return the first task that can be scheduled
 				}
 			}
 		}

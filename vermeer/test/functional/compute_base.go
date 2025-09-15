@@ -140,7 +140,7 @@ func (ctb *ComputeTaskBase) SendComputeReqAsyncBatchPriority(params []map[string
 		//若成功启动Compute Task，开始轮询tasksGet，解析response，得到状态为完成时break。
 		var taskResp *client.TaskResponse
 		var err error
-		for i := 0; i < ctb.waitSecond; i++ {
+		for attempt := 0; attempt < ctb.waitSecond; attempt++ {
 			ctb.healthCheck.DoHealthCheck()
 			taskResp, err = ctb.masterHttp.GetTask(ctb.taskID)
 			require.NoError(ctb.t, err)

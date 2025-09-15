@@ -8,6 +8,7 @@ import (
 )
 
 type SchedulerTaskManager struct {
+	structure.MutexLocker
 	// This struct is responsible for managing tasks in the scheduling system.
 	// A map from task ID to TaskInfo can be used to track tasks.
 	allTaskMap     map[int32]*structure.TaskInfo
@@ -32,6 +33,8 @@ func (t *SchedulerTaskManager) QueueTask(taskInfo *structure.TaskInfo) (bool, er
 		return false, errors.New("the property `SpaceName` of taskInfo is empty")
 	}
 
+	defer t.Unlock(t.Lock())
+
 	// Add the task to the task map
 	t.allTaskMap[taskInfo.ID] = taskInfo
 	t.allTaskQueue = append(t.allTaskQueue, taskInfo)
@@ -53,6 +56,13 @@ func (t *SchedulerTaskManager) RemoveTask(taskID int32) error {
 		return errors.New("task not found")
 	}
 	delete(t.allTaskMap, taskID)
+	// remove from queue
+	for i, task := range t.allTaskQueue {
+		if task.ID == taskID {
+			t.allTaskQueue = append(t.allTaskQueue[:i], t.allTaskQueue[i+1:]...)
+			break
+		}
+	}
 	delete(t.taskToworkerGroupMap, taskID)
 	return nil
 }
