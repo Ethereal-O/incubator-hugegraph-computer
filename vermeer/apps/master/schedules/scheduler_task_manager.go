@@ -14,12 +14,15 @@ type SchedulerTaskManager struct {
 	allTaskMap     map[int32]*structure.TaskInfo
 	allTaskQueue   []*structure.TaskInfo
 	startTaskQueue []*structure.TaskInfo
+	// onGoingTasks
+	notCompleteTasks map[int32]*structure.TaskInfo
 	// A map from task ID to worker group can be used to track which worker group is handling which task.
 	taskToworkerGroupMap map[int32]string
 }
 
 func (t *SchedulerTaskManager) Init() *SchedulerTaskManager {
 	t.allTaskMap = make(map[int32]*structure.TaskInfo)
+	t.notCompleteTasks = make(map[int32]*structure.TaskInfo)
 	t.taskToworkerGroupMap = make(map[int32]string)
 	return t
 }
@@ -38,8 +41,21 @@ func (t *SchedulerTaskManager) QueueTask(taskInfo *structure.TaskInfo) (bool, er
 	// Add the task to the task map
 	t.allTaskMap[taskInfo.ID] = taskInfo
 	t.allTaskQueue = append(t.allTaskQueue, taskInfo)
+	t.notCompleteTasks[taskInfo.ID] = taskInfo
 	t.AssignGroup(taskInfo)
 	return true, nil
+}
+
+func (t *SchedulerTaskManager) RefreshTaskToWorkerGroupMap() {
+	defer t.Unlock(t.Lock())
+
+	for _, taskInfo := range t.GetAllTasksNotComplete() {
+		if taskInfo == nil {
+			continue
+		}
+		t.AssignGroup(taskInfo)
+		t.taskToworkerGroupMap[taskInfo.ID] = workerMgr.ApplyGroup(taskInfo.SpaceName, taskInfo.GraphName)
+	}
 }
 
 // Only for debug or test, get task start sequence
@@ -64,6 +80,15 @@ func (t *SchedulerTaskManager) RemoveTask(taskID int32) error {
 		}
 	}
 	delete(t.taskToworkerGroupMap, taskID)
+	delete(t.notCompleteTasks, taskID)
+	return nil
+}
+
+func (t *SchedulerTaskManager) MarkTaskComplete(taskID int32) error {
+	if _, exists := t.allTaskMap[taskID]; !exists {
+		return errors.New("task not found")
+	}
+	delete(t.notCompleteTasks, taskID)
 	return nil
 }
 
@@ -106,9 +131,17 @@ func (t *SchedulerTaskManager) GetAllTasks() []*structure.TaskInfo {
 	return tasks
 }
 
+func (t *SchedulerTaskManager) GetAllTasksNotComplete() []*structure.TaskInfo {
+	tasks := make([]*structure.TaskInfo, 0, len(t.allTaskMap))
+	for _, task := range t.notCompleteTasks {
+		tasks = append(tasks, task)
+	}
+	return tasks
+}
+
 func (t *SchedulerTaskManager) GetAllTasksWaitng() []*structure.TaskInfo {
 	tasks := make([]*structure.TaskInfo, 0, len(t.allTaskMap))
-	for _, task := range t.allTaskMap {
+	for _, task := range t.GetAllTasksNotComplete() {
 		if task.State == structure.TaskStateWaiting {
 			tasks = append(tasks, task)
 		}
@@ -118,7 +151,7 @@ func (t *SchedulerTaskManager) GetAllTasksWaitng() []*structure.TaskInfo {
 
 func (t *SchedulerTaskManager) GetTasksInQueue(space string) []*structure.TaskInfo {
 	tasks := make([]*structure.TaskInfo, 0)
-	for _, task := range t.allTaskQueue {
+	for _, task := range t.GetAllTasksNotComplete() {
 		if task.SpaceName == space {
 			tasks = append(tasks, task)
 		}
@@ -153,9 +186,12 @@ func (t *SchedulerTaskManager) GetTaskStartSequence(queryTasks []int32) []*struc
 
 func (t *SchedulerTaskManager) GetTaskToWorkerGroupMap() map[int32]string {
 	// Return a copy of the worker group map to avoid external modifications
-	groupMap := make(map[int32]string, len(t.taskToworkerGroupMap))
-	for k, v := range t.taskToworkerGroupMap {
-		groupMap[k] = v
+	taskNotComplete := t.GetAllTasksNotComplete()
+	groupMap := make(map[int32]string, len(taskNotComplete))
+	for _, task := range taskNotComplete {
+		if group, exists := t.taskToworkerGroupMap[task.ID]; exists {
+			groupMap[task.ID] = group
+		}
 	}
 	return groupMap
 }

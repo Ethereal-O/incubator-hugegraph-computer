@@ -134,18 +134,22 @@ func (s *ScheduleBl) tryScheduleInner(softSchedule bool, noLock ...bool) error {
 
 	// step 1: make sure all tasks have alloc to a worker group
 	// This is done by the TaskManager, which assigns a worker group to each task
+	s.taskManager.RefreshTaskToWorkerGroupMap()
 
 	// step 2: get available resources and tasks
 	logrus.Debugf("scheduling next tasks, softSchedule: %v", softSchedule)
 	idleWorkerGroups := s.resourceManager.GetIdleWorkerGroups()
 	concurrentWorkerGroups := s.resourceManager.GetConcurrentWorkerGroups()
-	allTasks := s.taskManager.GetAllTasks()
+	allTasks := s.taskManager.GetAllTasksNotComplete()
 	if len(allTasks) == 0 || (len(idleWorkerGroups) == 0 && len(concurrentWorkerGroups) == 0) {
 		logrus.Debugf("no available tasks or workerGroups, allTasks: %d, workerGroups: %d/%d",
 			len(allTasks), len(idleWorkerGroups), len(concurrentWorkerGroups))
 		return nil
 	}
 	logrus.Debugf("all tasks: %d, workerGroups: %d/%d", len(allTasks), len(idleWorkerGroups), len(concurrentWorkerGroups))
+
+	// TODO: NEED TO JUDGE IF THE TASK CAN CONCURRENTLY RUNNING
+	// NOT only by user setting, but also by scheduler setting
 
 	// step 3: return the task with the highest priority or small tasks which can be executed immediately
 	taskToWorkerGroupMap := s.taskManager.GetTaskToWorkerGroupMap()
@@ -194,6 +198,19 @@ func (s *ScheduleBl) QueueTask(taskInfo *structure.TaskInfo) (bool, error) {
 	}
 
 	logrus.Debugf("queuing task %d with parameters: %+v", taskInfo.ID, taskInfo)
+
+	// check dependency if exists
+	if len(taskInfo.Preorders) > 0 {
+		for _, depTaskID := range taskInfo.Preorders {
+			depTask := taskMgr.GetTaskByID(depTaskID)
+			if depTask == nil {
+				err := errors.New("the dependency task with ID " + strconv.Itoa(int(depTaskID)) + " does not exist")
+				logrus.Error(err)
+				taskMgr.SetError(taskInfo, err.Error())
+				return false, err
+			}
+		}
+	}
 
 	// Notice: Ensure successful invocation.
 	// make sure all tasks have alloc to a worker group
