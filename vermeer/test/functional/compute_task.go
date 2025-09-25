@@ -37,6 +37,7 @@ type ComputeTask interface {
 	TaskComputeBody() map[string]string
 	SendComputeReqAsync(params map[string]string)
 	SendComputeReqAsyncNotWait(params map[string]string) int32
+	SendComputeReqAsyncNotWaitWithError(params map[string]string) (int32, error)
 	SendComputeReqAsyncBatchPriority(params []map[string]string) ([]int32, []int32)
 	SendComputeReqSync(params map[string]string)
 	LoadComputeRes() ([]interface{}, error)

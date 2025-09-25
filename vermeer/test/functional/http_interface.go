@@ -76,6 +76,16 @@ func (ct CancelTask) CancelTask(t *testing.T, master *client.VermeerClient, grap
 	require.Equal(t, "canceled", task.Task.Status)
 }
 
+func (ct CancelTask) DirectCancelTask(t *testing.T, master *client.VermeerClient, taskID int32) {
+	ok, err := master.GetTaskCancel(int(taskID))
+	require.NoError(t, err)
+	require.Equal(t, true, ok)
+
+	task, err := master.GetTask(int(taskID))
+	require.NoError(t, err)
+	require.Equal(t, "canceled", task.Task.Status)
+}
+
 type GetGraphs struct {
 }
 

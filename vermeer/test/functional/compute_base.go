@@ -108,6 +108,19 @@ func (ctb *ComputeTaskBase) SendComputeReqAsyncNotWait(params map[string]string)
 	return int32(resp.Task.ID)
 }
 
+func (ctb *ComputeTaskBase) SendComputeReqAsyncNotWaitWithError(params map[string]string) (int32, error) {
+	//create Compute Task
+	resp, err := ctb.masterHttp.CreateTaskAsync(client.TaskCreateRequest{
+		TaskType:  "compute",
+		GraphName: ctb.graphName,
+		Params:    params,
+	})
+	if err != nil {
+		return -1, err
+	}
+	return int32(resp.Task.ID), nil
+}
+
 func (ctb *ComputeTaskBase) SendComputeReqAsyncBatchPriority(params []map[string]string) ([]int32, []int32) {
 	//create Compute Task
 	tasks := make([]client.TaskInfo, 0, len(params))

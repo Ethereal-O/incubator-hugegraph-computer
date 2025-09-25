@@ -2,9 +2,11 @@ package scheduler
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
+	"vermeer/apps/structure"
 	"vermeer/client"
 	"vermeer/test/functional"
 
@@ -143,6 +145,100 @@ func SubTestDepends(t *testing.T, expectRes *functional.ExpectRes, healthCheck *
 	fmt.Printf("Test Depends: %-30s [OK], cost: %v\n", computeTask, time.Since(bTime))
 }
 
+// SubTestInvalidDependency 测试当任务依赖一个不存在的任务ID时，调度器的行为。
+// 调度器应该拒绝此任务，并返回一个错误。
+func SubTestInvalidDependency(t *testing.T, expectRes *functional.ExpectRes, healthCheck *functional.HealthCheck, masterHttp *client.VermeerClient, graphName []string, computeTask string, waitSecond int) {
+	fmt.Printf("Test Invalid Dependency start with task: %s\n", computeTask)
+	bTime := time.Now()
+
+	computeTest, err := functional.MakeComputeTask(computeTask)
+	require.NoError(t, err)
+	computeTest.Init(graphName[0], computeTask, expectRes, waitSecond, masterHttp, t, healthCheck)
+
+	taskBody := computeTest.TaskComputeBody()
+	// 设置 preorders 为一个非常大的、理论上不存在的任务ID
+	invalidTaskID := 999999999
+	taskBody["preorders"] = fmt.Sprintf("%d", invalidTaskID)
+
+	logrus.Infof("Attempting to submit a task with invalid dependency on ID: %d", invalidTaskID)
+
+	// 尝试异步提交任务，并检查是否返回了错误
+	taskID, err := computeTest.SendComputeReqAsyncNotWaitWithError(taskBody)
+
+	// 断言提交操作失败
+	require.Error(t, err, "Submitting a task with a non-existent dependency should return an error.")
+	// 断言返回的任务ID为0，或者其他表示失败的值
+	require.Equal(t, int32(-1), taskID, "The task ID should be zero or invalid on failure.")
+
+	fmt.Printf("Test Invalid Dependency: %-30s [OK], cost: %v\n", computeTask, time.Since(bTime))
+}
+
+func SubTestConcurrentCancellation(t *testing.T, expectRes *functional.ExpectRes, healthCheck *functional.HealthCheck, masterHttp *client.VermeerClient, graphName []string, computeTask string, waitSecond int) {
+	fmt.Printf("Test Concurrent Cancellation start with task: %s\n", computeTask)
+	bTime := time.Now()
+
+	computeTest, err := functional.MakeComputeTask(computeTask)
+	require.NoError(t, err)
+	computeTest.Init(graphName[0], computeTask, expectRes, waitSecond, masterHttp, t, healthCheck)
+
+	// 设置任务数量
+	const numTasks = 20
+	taskBodies := make([]map[string]string, numTasks)
+	for i := 0; i < numTasks; i++ {
+		taskBodies[i] = computeTest.TaskComputeBody()
+	}
+
+	taskIDs := make(chan int32, numTasks)
+	var wg sync.WaitGroup
+
+	// 1. 并发提交任务
+	for i := 0; i < numTasks; i++ {
+		wg.Add(1)
+		go func(body map[string]string) {
+			defer wg.Done()
+			taskID := computeTest.SendComputeReqAsyncNotWait(body)
+			if taskID != 0 {
+				taskIDs <- taskID
+			} else {
+				logrus.Errorf("Failed to submit task: %v", err)
+			}
+		}(taskBodies[i])
+	}
+
+	wg.Wait()
+	close(taskIDs)
+
+	submittedTaskIDs := make([]int32, 0, numTasks)
+	for id := range taskIDs {
+		submittedTaskIDs = append(submittedTaskIDs, id)
+	}
+
+	logrus.Infof("Submitted %d tasks concurrently: %+v", len(submittedTaskIDs), submittedTaskIDs)
+	require.Equal(t, numTasks, len(submittedTaskIDs), "Not all tasks were successfully submitted.")
+
+	cancelTask := functional.CancelTask{}
+	cancelTask.DirectCancelTask(t, masterHttp, submittedTaskIDs[len(submittedTaskIDs)-1])
+
+	// 3. 验证任务状态
+	// 这里需要一个循环来检查所有任务的最终状态
+	// 实际实现中，您可能需要根据调度器的API来轮询任务状态
+	// 在这个示例中，我们只做基本的断言，因为没有实际的取消和状态查询逻辑
+	logrus.Info("Waiting for tasks to settle...")
+	time.Sleep(time.Duration(waitSecond) * time.Second)
+
+	checkTask, err := masterHttp.GetTask(int(submittedTaskIDs[numTasks-1]))
+
+	require.NoError(t, err, "Error fetching task status after cancellation.")
+	require.NotNil(t, checkTask, "Task should exist after cancellation.")
+
+	if structure.TaskState(checkTask.Task.Status) != structure.TaskStateCanceled {
+		logrus.Warn("No tasks were cancelled; check scheduler behavior.")
+		require.Fail(t, "Expected at least some tasks to be cancelled.")
+	}
+
+	fmt.Printf("Test Concurrent Cancellation: %-30s [OK], cost: %v\n", computeTask, time.Since(bTime))
+}
+
 func TestPriority(t *testing.T, expectRes *functional.ExpectRes, healthCheck *functional.HealthCheck, masterHttp *client.VermeerClient, graphName []string, factor string, waitSecond int) {
 	fmt.Print("start test priority\n")
 
@@ -176,4 +272,8 @@ func TestPriority(t *testing.T, expectRes *functional.ExpectRes, healthCheck *fu
 	// 6. send tasks to different graphs
 	// expect: the tasks should be executed concurrently
 	// have been tested in SubTestSmall and SubTestDepends
+
+	SubTestInvalidDependency(t, expectRes, healthCheck, masterHttp, graphName, computeTask, waitSecond)
+
+	SubTestConcurrentCancellation(t, expectRes, healthCheck, masterHttp, graphName, computeTask, 3)
 }

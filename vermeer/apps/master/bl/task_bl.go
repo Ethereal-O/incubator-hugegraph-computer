@@ -67,23 +67,30 @@ func (tb *TaskBl) CreateTaskInfo(
 	// for scheduler
 	taskInfo.Priority = 0
 	taskInfo.Preorders = make([]int32, 0)
-	taskInfo.Exclusive = false // default to false, can be set to true if needed
-	// taskInfo.Exclusive = true
+	taskInfo.Exclusive = true // default to true for now, can be set false by params
 	if params != nil {
 		if priority, ok := params["priority"]; ok {
 			if p, err := strconv.ParseInt(priority, 10, 32); err == nil {
+				if p < 0 {
+					return nil, fmt.Errorf("priority should be non-negative")
+				}
 				taskInfo.Priority = int32(p)
 			} else {
 				logrus.Warnf("priority convert to int32 error:%v", err)
+				return nil, err
 			}
 		}
 		if preorders, ok := params["preorders"]; ok {
 			preorderList := strings.Split(preorders, ",")
 			for _, preorder := range preorderList {
 				if pid, err := strconv.ParseInt(preorder, 10, 32); err == nil {
+					if taskMgr.GetTaskByID(int32(pid)) == nil {
+						return nil, fmt.Errorf("preorder task id %d not exists", pid)
+					}
 					taskInfo.Preorders = append(taskInfo.Preorders, int32(pid))
 				} else {
 					logrus.Warnf("preorder convert to int32 error:%v", err)
+					return nil, err
 				}
 			}
 		}
@@ -92,9 +99,14 @@ func (tb *TaskBl) CreateTaskInfo(
 				taskInfo.Exclusive = ex
 			} else {
 				logrus.Warnf("exclusive convert to bool error:%v", err)
+				return nil, err
 			}
 		}
 		if cronExpr, ok := params["cron_expr"]; ok {
+			if err := Scheduler.cronManager.CheckCronExpression(cronExpr); err != nil {
+				logrus.Warnf("cron_expr parse error:%v", err)
+				return nil, err
+			}
 			taskInfo.CronExpr = cronExpr
 		}
 	}
