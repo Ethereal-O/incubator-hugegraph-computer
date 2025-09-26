@@ -199,19 +199,28 @@ func (rm *SchedulerResourceManager) changeWorkerStatus(workerName string, status
 		// get worker group name
 		groupName := workerInfo.Group
 		if groupName != "" {
-			// check all workers in this group are idle
-			allIdleOrConcurrent := true
-			for _, w := range workerMgr.GetGroupWorkers(groupName) {
-				if rm.workerStatus[w.Name] != WorkerOngoingStatusIdle && rm.workerStatus[w.Name] != WorkerOngoingStatusConcurrentRunning {
-					allIdleOrConcurrent = false
-					break
+			gws := workerMgr.GetGroupWorkers(groupName)
+			allIdle := true
+			allConcurrent := true
+			for _, w := range gws {
+				st := rm.workerStatus[w.Name]
+				if st != WorkerOngoingStatusIdle {
+					allIdle = false
+				}
+				if st != WorkerOngoingStatusConcurrentRunning {
+					allConcurrent = false
 				}
 			}
-			if allIdleOrConcurrent {
-				logrus.Debugf("Change worker group '%s' status to '%s' because all %d workers are idle or concurrent running", groupName, status, len(workerMgr.GetGroupWorkers(groupName)))
-				rm.changeWorkerGroupStatus(groupName, status)
+			if allConcurrent || allIdle {
+				newStatus := WorkerOngoingStatusIdle
+				if allConcurrent {
+					newStatus = WorkerOngoingStatusConcurrentRunning
+				}
+				logrus.Debugf("Change worker group '%s' status to '%s' (derived from %d workers)", groupName, newStatus, len(gws))
+				rm.changeWorkerGroupStatus(groupName, newStatus)
 			}
 		}
+
 	} else if status == WorkerOngoingStatusDeleted {
 		delete(rm.workerStatus, workerName)
 	}
