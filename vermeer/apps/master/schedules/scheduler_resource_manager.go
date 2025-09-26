@@ -191,6 +191,11 @@ func (rm *SchedulerResourceManager) changeWorkerStatus(workerName string, status
 	if status == WorkerOngoingStatusIdle || status == WorkerOngoingStatusConcurrentRunning {
 		workerInfo := workerMgr.GetWorkerInfo(workerName)
 
+		if workerInfo == nil {
+			logrus.Warnf("worker '%s' not found", workerName)
+			return
+		}
+
 		// get worker group name
 		groupName := workerInfo.Group
 		if groupName != "" {

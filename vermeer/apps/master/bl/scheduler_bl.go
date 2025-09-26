@@ -317,8 +317,8 @@ func (s *ScheduleBl) BatchQueueTask(taskInfos []*structure.TaskInfo) ([]bool, []
 		ok, err := s.QueueTask(taskInfo)
 		if err != nil {
 			logrus.Errorf("failed to queue task '%d': %v", taskInfo.ID, err)
-			errors = append(errors, err)
 		}
+		errors = append(errors, err)
 		oks = append(oks, ok)
 	}
 

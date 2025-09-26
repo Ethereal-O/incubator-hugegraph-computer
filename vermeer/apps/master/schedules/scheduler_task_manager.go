@@ -103,6 +103,7 @@ func (t *SchedulerTaskManager) RemoveTask(taskID int32) error {
 	if _, exists := t.allTaskMap[taskID]; !exists {
 		return errors.New("task not found")
 	}
+	defer t.Unlock(t.Lock())
 	delete(t.allTaskMap, taskID)
 	// remove from queue
 	for i, task := range t.allTaskQueue {
@@ -126,6 +127,7 @@ func (t *SchedulerTaskManager) MarkTaskComplete(taskID int32) error {
 	if _, exists := t.allTaskMap[taskID]; !exists {
 		return errors.New("task not found")
 	}
+	defer t.Unlock(t.Lock())
 	delete(t.notCompleteTasks, taskID)
 	return nil
 }

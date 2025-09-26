@@ -24,7 +24,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"vermeer/apps/master/workers"
-	. "vermeer/apps/master/workers"
 )
 
 type AgentStatus string
@@ -127,7 +126,7 @@ func (b *Broker) ApplyAgent(taskInfo *structure.TaskInfo, forceApply ...bool) (*
 // 	}
 // }
 
-func (b *Broker) isWorkersReady(workers map[string]*WorkerClient) bool {
+func (b *Broker) isWorkersReady(workers map[string]*workers.WorkerClient) bool {
 	ok := false
 	for _, w := range workers {
 		if w.Connection == nil {
@@ -169,7 +168,7 @@ func (b *Broker) isAgentBusy(agent *Agent) bool {
 	return busy
 }
 
-func (b *Broker) isWorkerBusy(workers map[string]*WorkerClient, agent *Agent) bool {
+func (b *Broker) isWorkerBusy(workers map[string]*workers.WorkerClient, agent *Agent) bool {
 	for _, a := range b.agents {
 		if a == agent {
 			continue
@@ -191,7 +190,7 @@ func (b *Broker) isWorkerBusy(workers map[string]*WorkerClient, agent *Agent) bo
 	return false
 }
 
-func (b *Broker) getAgent(taskInfo *structure.TaskInfo) (*Agent, map[string]*WorkerClient, error) {
+func (b *Broker) getAgent(taskInfo *structure.TaskInfo) (*Agent, map[string]*workers.WorkerClient, error) {
 	switch taskInfo.Type {
 	case structure.TaskTypeLoad:
 		fallthrough
@@ -205,7 +204,7 @@ func (b *Broker) getAgent(taskInfo *structure.TaskInfo) (*Agent, map[string]*Wor
 
 }
 
-func (b *Broker) getAgentFromGraph(taskInfo *structure.TaskInfo) (*Agent, map[string]*WorkerClient, error) {
+func (b *Broker) getAgentFromGraph(taskInfo *structure.TaskInfo) (*Agent, map[string]*workers.WorkerClient, error) {
 	graph := graphMgr.GetGraphByName(taskInfo.SpaceName, taskInfo.GraphName)
 	if graph == nil {
 		return nil, nil, fmt.Errorf("failed to retrieve graph with name: %s/%s", taskInfo.SpaceName, taskInfo.GraphName)
@@ -226,7 +225,7 @@ func (b *Broker) getAgentFromGraph(taskInfo *structure.TaskInfo) (*Agent, map[st
 		return nil, nil, nil // waiting for the next check
 	}
 
-	workers := make(map[string]*WorkerClient)
+	workers := make(map[string]*workers.WorkerClient)
 
 	for _, w := range graph.Workers {
 		wc := workerMgr.GetWorker(w.Name)
@@ -241,7 +240,7 @@ func (b *Broker) getAgentFromGraph(taskInfo *structure.TaskInfo) (*Agent, map[st
 
 }
 
-func (b *Broker) getAgentFromWorker(taskInfo *structure.TaskInfo) (*Agent, map[string]*WorkerClient, error) {
+func (b *Broker) getAgentFromWorker(taskInfo *structure.TaskInfo) (*Agent, map[string]*workers.WorkerClient, error) {
 	group := workerMgr.ApplyGroup(taskInfo.SpaceName, taskInfo.GraphName)
 	return b.retrieveAgent(group), workerMgr.GroupWorkerMap(group), nil
 }
