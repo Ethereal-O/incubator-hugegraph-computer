@@ -11,6 +11,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+/*
+* @Description: SubTestRoutine tests the scheduler's behavior when submitting tasks with cron expression.
+* @Param t
+* @Param expectRes
+* @Param healthCheck
+* @Param masterHttp
+* @Param graphName
+* @Param computeTask
+* @Param waitSecond
+ */
 func SubTestRoutine(t *testing.T, expectRes *functional.ExpectRes, healthCheck *functional.HealthCheck, masterHttp *client.VermeerClient, graphName []string, computeTask string, waitSecond int) {
 	fmt.Printf("Test Routine start with task: %s\n", computeTask)
 	bTime := time.Now()

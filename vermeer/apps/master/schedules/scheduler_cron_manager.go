@@ -8,6 +8,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+/*
+* @Description: SchedulerCronManager is the manager for the scheduler cron.
+* @Note: This is the manager for the scheduler cron.
+ */
 type SchedulerCronManager struct {
 	cronTasks map[int32][]*structure.TaskInfo // cron expression to TaskInfo. Origin task ID to copied tasks
 	crons     map[int32][]*cron.Cron          // cron expression to cron jobs
@@ -15,6 +19,12 @@ type SchedulerCronManager struct {
 	queueTemplateHandler func(*structure.TaskInfo) (int32, error)
 }
 
+/*
+* @Description: Init initializes the SchedulerCronManager.
+* @Note: This function will initialize the SchedulerCronManager.
+* @Param queueTemplateHandler
+* @Return *SchedulerCronManager
+ */
 func (t *SchedulerCronManager) Init(queueTemplateHandler func(*structure.TaskInfo) (int32, error)) *SchedulerCronManager {
 	t.cronTasks = make(map[int32][]*structure.TaskInfo)
 	t.crons = make(map[int32][]*cron.Cron)
@@ -22,6 +32,12 @@ func (t *SchedulerCronManager) Init(queueTemplateHandler func(*structure.TaskInf
 	return t
 }
 
+/*
+* @Description: CheckCronExpression checks the cron expression.
+* @Note: This function will check the cron expression.
+* @Param cronExpr
+* @Return error
+ */
 func (t *SchedulerCronManager) CheckCronExpression(cronExpr string) error {
 	if cronExpr == "" {
 		return errors.New("cron expression is empty")
@@ -33,6 +49,12 @@ func (t *SchedulerCronManager) CheckCronExpression(cronExpr string) error {
 	return nil
 }
 
+/*
+* @Description: AddCronTask adds the cron task.
+* @Note: This function will add the cron task.
+* @Param taskInfo
+* @Return error
+ */
 func (t *SchedulerCronManager) AddCronTask(taskInfo *structure.TaskInfo) error {
 	if taskInfo == nil {
 		return errors.New("the argument `taskInfo` is nil")
@@ -69,6 +91,12 @@ func (t *SchedulerCronManager) AddCronTask(taskInfo *structure.TaskInfo) error {
 	return nil
 }
 
+/*
+* @Description: DeleteTask deletes the cron task.
+* @Note: This function will delete the cron task.
+* @Param taskID
+* @Return error
+ */
 func (t *SchedulerCronManager) DeleteTask(taskID int32) error {
 	if _, exists := t.cronTasks[taskID]; !exists {
 		return errors.New("task not found in cron tasks")
@@ -83,6 +111,13 @@ func (t *SchedulerCronManager) DeleteTask(taskID int32) error {
 	return nil
 }
 
+/*
+* @Description: DeleteTaskByGraph deletes the cron task by graph.
+* @Note: This function will delete the cron task by graph.
+* @Param spaceName
+* @Param graphName
+* @Return error
+ */
 func (t *SchedulerCronManager) DeleteTaskByGraph(spaceName, graphName string) error {
 	if spaceName == "" || graphName == "" {
 		return errors.New("the argument `spaceName` or `graphName` is empty")

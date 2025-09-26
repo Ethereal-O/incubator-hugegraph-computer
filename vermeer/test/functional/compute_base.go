@@ -97,6 +97,11 @@ func (ctb *ComputeTaskBase) SendComputeReqAsync(params map[string]string) {
 	require.Equal(ctb.t, "complete", taskResp.Task.Status)
 }
 
+/*
+* @Description: SendComputeReqAsyncNotWait sends a compute request asynchronously and returns the task ID.
+* @Param params
+* @Return int32
+ */
 func (ctb *ComputeTaskBase) SendComputeReqAsyncNotWait(params map[string]string) int32 {
 	//create Compute Task
 	resp, err := ctb.masterHttp.CreateTaskAsync(client.TaskCreateRequest{
@@ -108,6 +113,11 @@ func (ctb *ComputeTaskBase) SendComputeReqAsyncNotWait(params map[string]string)
 	return int32(resp.Task.ID)
 }
 
+/*
+* @Description: SendComputeReqAsyncNotWaitWithError sends a compute request asynchronously and returns the task ID and error.
+* @Param params
+* @Return int32, error
+ */
 func (ctb *ComputeTaskBase) SendComputeReqAsyncNotWaitWithError(params map[string]string) (int32, error) {
 	//create Compute Task
 	resp, err := ctb.masterHttp.CreateTaskAsync(client.TaskCreateRequest{
@@ -121,6 +131,12 @@ func (ctb *ComputeTaskBase) SendComputeReqAsyncNotWaitWithError(params map[strin
 	return int32(resp.Task.ID), nil
 }
 
+/*
+* @Description: SendComputeReqAsyncBatchPriority sends a compute request asynchronously and returns the task ID and sequence.
+* @Note: This function will block the main thread until all tasks are completed.
+* @Param params
+* @Return []int32, []int32
+ */
 func (ctb *ComputeTaskBase) SendComputeReqAsyncBatchPriority(params []map[string]string) ([]int32, []int32) {
 	//create Compute Task
 	tasks := make([]client.TaskInfo, 0, len(params))

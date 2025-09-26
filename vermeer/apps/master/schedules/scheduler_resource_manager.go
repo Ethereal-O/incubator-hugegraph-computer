@@ -7,6 +7,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+/*
+* @Description: WorkerOngoingStatus is the status of the worker ongoing.
+* @Note: This is the status of the worker ongoing.
+ */
 type WorkerOngoingStatus string
 
 const (
@@ -17,6 +21,10 @@ const (
 	WorkerOngoingStatusDeleted           WorkerOngoingStatus = "deleted"
 )
 
+/*
+* @Description: SchedulerResourceManager is the manager for the scheduler resource.
+* @Note: This is the manager for the scheduler resource.
+ */
 type SchedulerResourceManager struct {
 	structure.MutexLocker
 	workerStatus            map[string]WorkerOngoingStatus
@@ -27,6 +35,10 @@ type SchedulerResourceManager struct {
 	broker *Broker
 }
 
+/*
+* @Description: Init initializes the SchedulerResourceManager.
+* @Note: This function will initialize the SchedulerResourceManager.
+ */
 func (rm *SchedulerResourceManager) Init() {
 	rm.workerStatus = make(map[string]WorkerOngoingStatus)
 	rm.workerGroupStatus = make(map[string]WorkerOngoingStatus)
@@ -34,6 +46,11 @@ func (rm *SchedulerResourceManager) Init() {
 	rm.broker = new(Broker).Init()
 }
 
+/*
+* @Description: ReleaseByTaskID releases the resource by task ID.
+* @Note: This function will release the resource by task ID.
+* @Param taskID
+ */
 func (rm *SchedulerResourceManager) ReleaseByTaskID(taskID int32) {
 	defer rm.Unlock(rm.Lock())
 
@@ -64,6 +81,13 @@ func (rm *SchedulerResourceManager) ReleaseByTaskID(taskID int32) {
 	}
 }
 
+/*
+* @Description: isTaskRunningOnWorkerGroup checks if the task is running on the worker group.
+* @Note: This function will check if the task is running on the worker group.
+* @Param workerGroup
+* @Param taskID
+* @Return bool
+ */
 func (rm *SchedulerResourceManager) isTaskRunningOnWorkerGroup(workerGroup string, taskID int32) bool {
 	if tasks, exists := rm.runningWorkerGroupTasks[workerGroup]; exists {
 		for _, id := range tasks {
@@ -75,6 +99,12 @@ func (rm *SchedulerResourceManager) isTaskRunningOnWorkerGroup(workerGroup strin
 	return false
 }
 
+/*
+* @Description: GetAgentAndAssignTask gets the agent and assigns the task.
+* @Note: This function will get the agent and assigns the task.
+* @Param taskInfo
+* @Return *Agent, AgentStatus, error
+ */
 func (rm *SchedulerResourceManager) GetAgentAndAssignTask(taskInfo *structure.TaskInfo) (*Agent, AgentStatus, error) {
 	if taskInfo == nil {
 		return nil, AgentStatusError, errors.New("taskInfo is nil")
@@ -115,6 +145,11 @@ func (rm *SchedulerResourceManager) GetAgentAndAssignTask(taskInfo *structure.Ta
 	return agent, status, nil
 }
 
+/*
+* @Description: GetIdleWorkerGroups gets the idle worker groups.
+* @Note: This function will get the idle worker groups.
+* @Return []string
+ */
 func (rm *SchedulerResourceManager) GetIdleWorkerGroups() []string {
 	defer rm.Unlock(rm.Lock())
 
@@ -127,6 +162,11 @@ func (rm *SchedulerResourceManager) GetIdleWorkerGroups() []string {
 	return idleWorkerGroups
 }
 
+/*
+* @Description: GetConcurrentWorkerGroups gets the concurrent worker groups.
+* @Note: This function will get the concurrent worker groups.
+* @Return []string
+ */
 func (rm *SchedulerResourceManager) GetConcurrentWorkerGroups() []string {
 	defer rm.Unlock(rm.Lock())
 
@@ -139,6 +179,12 @@ func (rm *SchedulerResourceManager) GetConcurrentWorkerGroups() []string {
 	return concurrentWorkerGroups
 }
 
+/*
+* @Description: changeWorkerStatus changes the worker status.
+* @Note: This function will change the worker status.
+* @Param workerName
+* @Param status
+ */
 func (rm *SchedulerResourceManager) changeWorkerStatus(workerName string, status WorkerOngoingStatus) {
 	rm.workerStatus[workerName] = status
 

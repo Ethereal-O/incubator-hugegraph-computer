@@ -28,6 +28,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+/*
+* @Description: ScheduleBl is the scheduler business logic.
+* @Note: This is the main scheduler business logic.
+ */
 type ScheduleBl struct {
 	structure.MutexLocker
 	// resource management
@@ -46,6 +50,10 @@ type ScheduleBl struct {
 	softSchedule   bool
 }
 
+/*
+* @Description: Init initializes the ScheduleBl.
+* @Note: This function will initialize the ScheduleBl.
+ */
 func (s *ScheduleBl) Init() {
 	logrus.Info("Initializing ScheduleBl...")
 	s.LoadConfig()
@@ -64,6 +72,10 @@ func (s *ScheduleBl) Init() {
 	go s.waitingStartedTask()
 }
 
+/*
+* @Description: LoadConfig loads the configuration from the common package.
+* @Note: This function will load the configuration from the common package.
+ */
 func (s *ScheduleBl) LoadConfig() {
 	// Load configuration from common package
 
@@ -102,6 +114,10 @@ func (s *ScheduleBl) LoadConfig() {
 		s.startChanSize, s.tickerInterval, s.softSchedule)
 }
 
+/*
+* @Description: startTicker starts the ticker.
+* @Note: This function will start the ticker.
+ */
 func (s *ScheduleBl) startTicker() {
 	// Create a ticker with the specified interval
 	ticker := time.Tick(time.Duration(s.tickerInterval) * time.Second)
@@ -113,6 +129,11 @@ func (s *ScheduleBl) startTicker() {
 }
 
 // this make scheduler manager try to schedule next tasks
+/*
+* @Description: TryScheduleNextTasks tries to schedule the next tasks.
+* @Note: This function will try to schedule the next tasks.
+* @Param noLock
+ */
 func (s *ScheduleBl) TryScheduleNextTasks(noLock ...bool) {
 	defer func() {
 		if err := recover(); err != nil {
@@ -126,6 +147,12 @@ func (s *ScheduleBl) TryScheduleNextTasks(noLock ...bool) {
 }
 
 // Main routine to schedule tasks
+/*
+* @Description: tryScheduleInner tries to schedule the next tasks.
+* @Note: This function will try to schedule the next tasks.
+* @Param softSchedule
+* @Param noLock
+ */
 func (s *ScheduleBl) tryScheduleInner(softSchedule bool, noLock ...bool) error {
 	// Implement logic to get the next task in the queue for the given space
 	if !(len(noLock) > 0 && noLock[0]) {
@@ -183,6 +210,12 @@ func (s *ScheduleBl) tryScheduleInner(softSchedule bool, noLock ...bool) error {
 
 // QueueTask Add the task to the inner queue.
 // If the task exists, return false.
+/*
+* @Description: QueueTask queues the task.
+* @Note: This function will queue the task.
+* @Param taskInfo
+* @Return bool, error
+ */
 func (s *ScheduleBl) QueueTask(taskInfo *structure.TaskInfo) (bool, error) {
 	if taskInfo == nil {
 		return false, errors.New("the argument `taskInfo` is nil")
@@ -231,6 +264,12 @@ func (s *ScheduleBl) QueueTask(taskInfo *structure.TaskInfo) (bool, error) {
 	return ok, nil
 }
 
+/*
+* @Description: QueueTaskFromTemplate queues the task from the template.
+* @Note: This function will queue the task from the template. This function is used by cron tasks.
+* @Param template
+* @Return int32, error
+ */
 func (s *ScheduleBl) QueueTaskFromTemplate(template *structure.TaskInfo) (int32, error) {
 	if template == nil {
 		return -1, errors.New("the argument `template` is nil")
@@ -255,6 +294,12 @@ func (s *ScheduleBl) QueueTaskFromTemplate(template *structure.TaskInfo) (int32,
 	return taskInfo.ID, nil
 }
 
+/*
+* @Description: BatchQueueTask batches the task.
+* @Note: This function will batch the task.
+* @Param taskInfos
+* @Return []bool, []error
+ */
 func (s *ScheduleBl) BatchQueueTask(taskInfos []*structure.TaskInfo) ([]bool, []error) {
 	if len(taskInfos) == 0 {
 		return []bool{}, []error{}
@@ -281,7 +326,6 @@ func (s *ScheduleBl) BatchQueueTask(taskInfos []*structure.TaskInfo) ([]bool, []
 }
 
 // ******** CloseCurrent ********
-
 func (s *ScheduleBl) CloseCurrent(taskId int32, removeWorkerName ...string) error {
 	defer s.Unlock(s.Lock())
 
@@ -307,6 +351,8 @@ func (s *ScheduleBl) CloseCurrent(taskId int32, removeWorkerName ...string) erro
 	return nil
 }
 
+// This will be called when a worker is offline.
+// This will be called when a worker is online.
 func (s *ScheduleBl) ChangeWorkerStatus(workerName string, status schedules.WorkerOngoingStatus) (bool, error) {
 	defer s.Unlock(s.Lock())
 	s.resourceManager.ChangeWorkerStatus(workerName, status)
@@ -406,7 +452,7 @@ func (s *ScheduleBl) startWaitingTask(agent *schedules.Agent, taskInfo *structur
 
 // ********* CANCEL TASK ********
 // handle cancel task
-
+// need to cancel cron task
 func (s *ScheduleBl) CancelTask(taskInfo *structure.TaskInfo) error {
 	if taskInfo == nil {
 		return errors.New("the argument `taskInfo` is nil")

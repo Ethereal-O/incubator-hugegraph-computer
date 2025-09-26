@@ -7,12 +7,17 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+/*
+* @Description: SchedulerTaskManager is the manager for the scheduler task.
+* @Note: This is the manager for the scheduler task.
+ */
 type SchedulerTaskManager struct {
 	structure.MutexLocker
 	// This struct is responsible for managing tasks in the scheduling system.
 	// A map from task ID to TaskInfo can be used to track tasks.
-	allTaskMap     map[int32]*structure.TaskInfo
-	allTaskQueue   []*structure.TaskInfo
+	allTaskMap   map[int32]*structure.TaskInfo
+	allTaskQueue []*structure.TaskInfo
+	// For debug or test, get task start sequence
 	startTaskQueue []*structure.TaskInfo
 	// onGoingTasks
 	notCompleteTasks map[int32]*structure.TaskInfo
@@ -20,6 +25,11 @@ type SchedulerTaskManager struct {
 	taskToworkerGroupMap map[int32]string
 }
 
+/*
+* @Description: Init initializes the SchedulerTaskManager.
+* @Note: This function will initialize the SchedulerTaskManager.
+* @Return *SchedulerTaskManager
+ */
 func (t *SchedulerTaskManager) Init() *SchedulerTaskManager {
 	t.allTaskMap = make(map[int32]*structure.TaskInfo)
 	t.notCompleteTasks = make(map[int32]*structure.TaskInfo)
@@ -27,6 +37,12 @@ func (t *SchedulerTaskManager) Init() *SchedulerTaskManager {
 	return t
 }
 
+/*
+* @Description: QueueTask queues the task.
+* @Note: This function will queue the task.
+* @Param taskInfo
+* @Return bool, error
+ */
 func (t *SchedulerTaskManager) QueueTask(taskInfo *structure.TaskInfo) (bool, error) {
 	if taskInfo == nil {
 		return false, errors.New("the argument `taskInfo` is nil")
@@ -46,6 +62,10 @@ func (t *SchedulerTaskManager) QueueTask(taskInfo *structure.TaskInfo) (bool, er
 	return true, nil
 }
 
+/*
+* @Description: RefreshTaskToWorkerGroupMap refreshes the task to worker group map.
+* @Note: This function will refresh the task to worker group map.
+ */
 func (t *SchedulerTaskManager) RefreshTaskToWorkerGroupMap() {
 	defer t.Unlock(t.Lock())
 
@@ -59,6 +79,12 @@ func (t *SchedulerTaskManager) RefreshTaskToWorkerGroupMap() {
 }
 
 // Only for debug or test, get task start sequence
+/*
+* @Description: AddTaskStartSequence adds the task start sequence.
+* @Note: This function will add the task start sequence.
+* @Param taskID
+* @Return error
+ */
 func (t *SchedulerTaskManager) AddTaskStartSequence(taskID int32) error {
 	if _, exists := t.allTaskMap[taskID]; !exists {
 		return errors.New("task not found")
@@ -67,6 +93,12 @@ func (t *SchedulerTaskManager) AddTaskStartSequence(taskID int32) error {
 	return nil
 }
 
+/*
+* @Description: RemoveTask removes the task.
+* @Note: This function will remove the task.
+* @Param taskID
+* @Return error
+ */
 func (t *SchedulerTaskManager) RemoveTask(taskID int32) error {
 	if _, exists := t.allTaskMap[taskID]; !exists {
 		return errors.New("task not found")
@@ -84,6 +116,12 @@ func (t *SchedulerTaskManager) RemoveTask(taskID int32) error {
 	return nil
 }
 
+/*
+* @Description: MarkTaskComplete marks the task complete.
+* @Note: This function will mark the task complete.
+* @Param taskID
+* @Return error
+ */
 func (t *SchedulerTaskManager) MarkTaskComplete(taskID int32) error {
 	if _, exists := t.allTaskMap[taskID]; !exists {
 		return errors.New("task not found")
@@ -93,6 +131,12 @@ func (t *SchedulerTaskManager) MarkTaskComplete(taskID int32) error {
 }
 
 // update or create a task in the task map
+/*
+* @Description: AssignGroup assigns the group.
+* @Note: This function will assign the group.
+* @Param taskInfo
+* @Return error
+ */
 func (t *SchedulerTaskManager) AssignGroup(taskInfo *structure.TaskInfo) error {
 	group := workerMgr.ApplyGroup(taskInfo.SpaceName, taskInfo.GraphName)
 	if group == "" {
@@ -102,6 +146,12 @@ func (t *SchedulerTaskManager) AssignGroup(taskInfo *structure.TaskInfo) error {
 	return nil
 }
 
+/*
+* @Description: GetTaskByID gets the task by ID.
+* @Note: This function will get the task by ID.
+* @Param taskID
+* @Return *structure.TaskInfo, error
+ */
 func (t *SchedulerTaskManager) GetTaskByID(taskID int32) (*structure.TaskInfo, error) {
 	task, exists := t.allTaskMap[taskID]
 	if !exists {
@@ -110,6 +160,12 @@ func (t *SchedulerTaskManager) GetTaskByID(taskID int32) (*structure.TaskInfo, e
 	return task, nil
 }
 
+/*
+* @Description: GetLastTask gets the last task.
+* @Note: This function will get the last task.
+* @Param spaceName
+* @Return *structure.TaskInfo
+ */
 func (t *SchedulerTaskManager) GetLastTask(spaceName string) *structure.TaskInfo {
 	// Implement logic to get the last task in the queue for the given space
 	if len(t.allTaskQueue) == 0 {
@@ -123,6 +179,11 @@ func (t *SchedulerTaskManager) GetLastTask(spaceName string) *structure.TaskInfo
 	return nil
 }
 
+/*
+* @Description: GetAllTasks gets all tasks.
+* @Note: This function will get all tasks.
+* @Return []*structure.TaskInfo
+ */
 func (t *SchedulerTaskManager) GetAllTasks() []*structure.TaskInfo {
 	tasks := make([]*structure.TaskInfo, 0, len(t.allTaskMap))
 	for _, task := range t.allTaskMap {

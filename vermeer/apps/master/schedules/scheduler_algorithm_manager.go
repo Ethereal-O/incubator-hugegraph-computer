@@ -11,6 +11,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+/*
+* @Description: SchedulerAlgorithm is the interface for the scheduler algorithm.
+* @Note: This is the interface for the scheduler algorithm.
+ */
 type SchedulerAlgorithm interface {
 	// Name returns the name of the SchedulerAlgorithm
 	Name() string
@@ -22,12 +26,21 @@ type SchedulerAlgorithm interface {
 	ScheduleNextTasks(filteredTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkerGroups []string, concurrentWorkerGroups []string, softSchedule bool) ([]*structure.TaskInfo, error)
 }
 
+/*
+* @Description: SchedulerAlgorithmManager is the manager for the scheduler algorithm.
+* @Note: This is the manager for the scheduler algorithm.
+ */
 type SchedulerAlgorithmManager struct {
 	filteredSchedulerAlgorithms  map[string]SchedulerAlgorithm
 	scheduledSchedulerAlgorithms map[string]SchedulerAlgorithm
 	dispatchPaused               bool
 }
 
+/*
+* @Description: Init initializes the SchedulerAlgorithmManager.
+* @Note: This function will initialize the SchedulerAlgorithmManager.
+ */
+// Need to put DependsSchedulerAlgorithm before WaitingSchedulerAlgorithm
 func (am *SchedulerAlgorithmManager) Init() {
 	am.filteredSchedulerAlgorithms = make(map[string]SchedulerAlgorithm)
 	am.scheduledSchedulerAlgorithms = make(map[string]SchedulerAlgorithm)
@@ -39,6 +52,11 @@ func (am *SchedulerAlgorithmManager) Init() {
 	am.RegisterSchedulerAlgorithm(&PriorityElderSchedulerAlgorithm{})
 }
 
+/*
+* @Description: RegisterSchedulerAlgorithm registers the scheduler algorithm.
+* @Note: This function will register the scheduler algorithm.
+* @Param schedulerAlgorithm
+ */
 func (am *SchedulerAlgorithmManager) RegisterSchedulerAlgorithm(schedulerAlgorithm SchedulerAlgorithm) {
 	if schedulerAlgorithm == nil {
 		return
@@ -56,6 +74,11 @@ func (am *SchedulerAlgorithmManager) RegisterSchedulerAlgorithm(schedulerAlgorit
 	am.scheduledSchedulerAlgorithms[name] = schedulerAlgorithm
 }
 
+/*
+* @Description: RegisterFilterAlgorithm registers the filter algorithm.
+* @Note: This function will register the filter algorithm.
+* @Param filterAlgorithm
+ */
 func (am *SchedulerAlgorithmManager) RegisterFilterAlgorithm(filterAlgorithm SchedulerAlgorithm) {
 	if filterAlgorithm == nil {
 		return
@@ -68,18 +91,43 @@ func (am *SchedulerAlgorithmManager) RegisterFilterAlgorithm(filterAlgorithm Sch
 	am.filteredSchedulerAlgorithms[name] = filterAlgorithm
 }
 
+/*
+* @Description: IsDispatchPaused checks if the dispatch is paused.
+* @Note: This function will check if the dispatch is paused.
+* @Return bool
+ */
 func (am *SchedulerAlgorithmManager) IsDispatchPaused() bool {
 	return am.dispatchPaused
 }
 
+/*
+* @Description: PauseDispatch pauses the dispatch.
+* @Note: This function will pause the dispatch.
+ */
 func (am *SchedulerAlgorithmManager) PauseDispatch() {
 	am.dispatchPaused = true
 }
 
+/*
+* @Description: ResumeDispatch resumes the dispatch.
+* @Note: This function will resume the dispatch.
+ */
 func (am *SchedulerAlgorithmManager) ResumeDispatch() {
 	am.dispatchPaused = false
 }
 
+/*
+* @Description: ScheduleNextTasks schedules the next tasks.
+* @Note: This function will schedule the next tasks.
+* @Param allTasks
+* @Param taskToWorkerGroupMap
+* @Param idleWorkerGroups
+* @Param concurrentWorkerGroups
+* @Param softSchedule
+* @Return []*structure.TaskInfo, error
+ */
+// For all tasks, filter and schedule them
+// Only one scheduling algorithm is supported for now
 func (am *SchedulerAlgorithmManager) ScheduleNextTasks(allTasks []*structure.TaskInfo, taskToWorkerGroupMap map[int32]string, idleWorkerGroups []string, concurrentWorkerGroups []string, softSchedule bool) ([]*structure.TaskInfo, error) {
 	if am.dispatchPaused {
 		return nil, nil // No tasks to schedule if dispatch is paused

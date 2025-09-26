@@ -76,6 +76,12 @@ func (ct CancelTask) CancelTask(t *testing.T, master *client.VermeerClient, grap
 	require.Equal(t, "canceled", task.Task.Status)
 }
 
+/*
+* @Description: DirectCancelTask cancels a task directly.
+* @Param t
+* @Param master
+* @Param taskID
+ */
 func (ct CancelTask) DirectCancelTask(t *testing.T, master *client.VermeerClient, taskID int32) {
 	ok, err := master.GetTaskCancel(int(taskID))
 	require.NoError(t, err)

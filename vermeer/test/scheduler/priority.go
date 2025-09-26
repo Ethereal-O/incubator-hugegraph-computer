@@ -14,6 +14,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+/*
+* @Description: SubTestPriority tests the scheduler's behavior when submitting tasks with different priorities.
+* @Param t
+* @Param expectRes
+* @Param healthCheck
+* @Param masterHttp
+* @Param graphName
+* @Param computeTask
+* @Param waitSecond
+ */
 func SubTestPriority(t *testing.T, expectRes *functional.ExpectRes, healthCheck *functional.HealthCheck, masterHttp *client.VermeerClient, graphName []string, computeTask string, waitSecond int) {
 	fmt.Printf("Test Priority start with task: %s\n", computeTask)
 	bTime := time.Now()
@@ -47,6 +57,16 @@ func SubTestPriority(t *testing.T, expectRes *functional.ExpectRes, healthCheck 
 	fmt.Printf("Test Priority: %-30s [OK], cost: %v\n", computeTask, time.Since(bTime))
 }
 
+/*
+* @Description: SubTestSmall tests the scheduler's behavior when submitting tasks with different sizes.
+* @Param t
+* @Param expectRes
+* @Param healthCheck
+* @Param masterHttp
+* @Param graphName
+* @Param computeTask
+* @Param waitSecond
+ */
 func SubTestSmall(t *testing.T, expectRes *functional.ExpectRes, healthCheck *functional.HealthCheck, masterHttp *client.VermeerClient, graphName []string, computeTask string, waitSecond int) {
 	fmt.Printf("Test Small start with task: %s\n", computeTask)
 	bTime := time.Now()
@@ -78,6 +98,16 @@ func SubTestSmall(t *testing.T, expectRes *functional.ExpectRes, healthCheck *fu
 	fmt.Printf("Test Small: %-30s [OK], cost: %v\n", computeTask, time.Since(bTime))
 }
 
+/*
+* @Description: SubTestConcurrent tests the scheduler's behavior when submitting tasks with different sizes.
+* @Param t
+* @Param expectRes
+* @Param healthCheck
+* @Param masterHttp
+* @Param graphName
+* @Param computeTask
+* @Param waitSecond
+ */
 func SubTestConcurrent(t *testing.T, expectRes *functional.ExpectRes, healthCheck *functional.HealthCheck, masterHttp *client.VermeerClient, graphName []string, computeTask string, waitSecond int) {
 	fmt.Printf("Test Concurrent start with task: %s\n", computeTask)
 	bTime := time.Now()
@@ -103,6 +133,16 @@ func SubTestConcurrent(t *testing.T, expectRes *functional.ExpectRes, healthChec
 	// cost should be less than 2 * single task time
 }
 
+/*
+* @Description: SubTestDepends tests the scheduler's behavior when submitting tasks with different dependencies.
+* @Param t
+* @Param expectRes
+* @Param healthCheck
+* @Param masterHttp
+* @Param graphName
+* @Param computeTask
+* @Param waitSecond
+ */
 func SubTestDepends(t *testing.T, expectRes *functional.ExpectRes, healthCheck *functional.HealthCheck, masterHttp *client.VermeerClient, graphName []string, computeTask string, waitSecond int) {
 	fmt.Printf("Test Depends start with task: %s\n", computeTask)
 	bTime := time.Now()
@@ -145,8 +185,16 @@ func SubTestDepends(t *testing.T, expectRes *functional.ExpectRes, healthCheck *
 	fmt.Printf("Test Depends: %-30s [OK], cost: %v\n", computeTask, time.Since(bTime))
 }
 
-// SubTestInvalidDependency 测试当任务依赖一个不存在的任务ID时，调度器的行为。
-// 调度器应该拒绝此任务，并返回一个错误。
+/*
+* @Description: SubTestInvalidDependency tests the scheduler's behavior when a compute task is submitted with a dependency on a non-existent (invalid) task ID.
+* @Param t
+* @Param expectRes
+* @Param healthCheck
+* @Param masterHttp
+* @Param graphName
+* @Param computeTask
+* @Param waitSecond
+ */
 func SubTestInvalidDependency(t *testing.T, expectRes *functional.ExpectRes, healthCheck *functional.HealthCheck, masterHttp *client.VermeerClient, graphName []string, computeTask string, waitSecond int) {
 	fmt.Printf("Test Invalid Dependency start with task: %s\n", computeTask)
 	bTime := time.Now()
@@ -156,23 +204,33 @@ func SubTestInvalidDependency(t *testing.T, expectRes *functional.ExpectRes, hea
 	computeTest.Init(graphName[0], computeTask, expectRes, waitSecond, masterHttp, t, healthCheck)
 
 	taskBody := computeTest.TaskComputeBody()
-	// 设置 preorders 为一个非常大的、理论上不存在的任务ID
+	// set preorders to a very large, theoretically nonexistent task ID
 	invalidTaskID := 999999999
 	taskBody["preorders"] = fmt.Sprintf("%d", invalidTaskID)
 
 	logrus.Infof("Attempting to submit a task with invalid dependency on ID: %d", invalidTaskID)
 
-	// 尝试异步提交任务，并检查是否返回了错误
+	// try to submit task asynchronously and check if it returns an error
 	taskID, err := computeTest.SendComputeReqAsyncNotWaitWithError(taskBody)
 
-	// 断言提交操作失败
+	// assert that the submission operation failed
 	require.Error(t, err, "Submitting a task with a non-existent dependency should return an error.")
-	// 断言返回的任务ID为0，或者其他表示失败的值
+	// assert that the returned task ID is 0 or other failed values
 	require.Equal(t, int32(-1), taskID, "The task ID should be zero or invalid on failure.")
 
 	fmt.Printf("Test Invalid Dependency: %-30s [OK], cost: %v\n", computeTask, time.Since(bTime))
 }
 
+/*
+* @Description: SubTestConcurrentCancellation tests the scheduler's behavior when submitting tasks concurrently and canceling them.
+* @Param t
+* @Param expectRes
+* @Param healthCheck
+* @Param masterHttp
+* @Param graphName
+* @Param computeTask
+* @Param waitSecond
+ */
 func SubTestConcurrentCancellation(t *testing.T, expectRes *functional.ExpectRes, healthCheck *functional.HealthCheck, masterHttp *client.VermeerClient, graphName []string, computeTask string, waitSecond int) {
 	fmt.Printf("Test Concurrent Cancellation start with task: %s\n", computeTask)
 	bTime := time.Now()
@@ -181,7 +239,7 @@ func SubTestConcurrentCancellation(t *testing.T, expectRes *functional.ExpectRes
 	require.NoError(t, err)
 	computeTest.Init(graphName[0], computeTask, expectRes, waitSecond, masterHttp, t, healthCheck)
 
-	// 设置任务数量
+	// set task number
 	const numTasks = 20
 	taskBodies := make([]map[string]string, numTasks)
 	for i := 0; i < numTasks; i++ {
@@ -191,7 +249,7 @@ func SubTestConcurrentCancellation(t *testing.T, expectRes *functional.ExpectRes
 	taskIDs := make(chan int32, numTasks)
 	var wg sync.WaitGroup
 
-	// 1. 并发提交任务
+	// 1. submit tasks concurrently
 	for i := 0; i < numTasks; i++ {
 		wg.Add(1)
 		go func(body map[string]string) {
@@ -219,10 +277,8 @@ func SubTestConcurrentCancellation(t *testing.T, expectRes *functional.ExpectRes
 	cancelTask := functional.CancelTask{}
 	cancelTask.DirectCancelTask(t, masterHttp, submittedTaskIDs[len(submittedTaskIDs)-1])
 
-	// 3. 验证任务状态
-	// 这里需要一个循环来检查所有任务的最终状态
-	// 实际实现中，您可能需要根据调度器的API来轮询任务状态
-	// 在这个示例中，我们只做基本的断言，因为没有实际的取消和状态查询逻辑
+	// 3. verify task status
+	// wait for tasks to settle
 	logrus.Info("Waiting for tasks to settle...")
 	time.Sleep(time.Duration(waitSecond) * time.Second)
 
@@ -239,6 +295,16 @@ func SubTestConcurrentCancellation(t *testing.T, expectRes *functional.ExpectRes
 	fmt.Printf("Test Concurrent Cancellation: %-30s [OK], cost: %v\n", computeTask, time.Since(bTime))
 }
 
+/*
+* @Description: This is the main test function for priority.
+* @Param t
+* @Param expectRes
+* @Param healthCheck
+* @Param masterHttp
+* @Param graphName
+* @Param computeTask
+* @Param waitSecond
+ */
 func TestPriority(t *testing.T, expectRes *functional.ExpectRes, healthCheck *functional.HealthCheck, masterHttp *client.VermeerClient, graphName []string, factor string, waitSecond int) {
 	fmt.Print("start test priority\n")
 
@@ -273,7 +339,11 @@ func TestPriority(t *testing.T, expectRes *functional.ExpectRes, healthCheck *fu
 	// expect: the tasks should be executed concurrently
 	// have been tested in SubTestSmall and SubTestDepends
 
+	// 7. send tasks with invalid dependency to single graph
+	// expect: the tasks should not be executed
 	SubTestInvalidDependency(t, expectRes, healthCheck, masterHttp, graphName, computeTask, waitSecond)
 
+	// 8. send tasks concurrently and cancel them
+	// expect: the tasks should be cancelled
 	SubTestConcurrentCancellation(t, expectRes, healthCheck, masterHttp, graphName, computeTask, 3)
 }

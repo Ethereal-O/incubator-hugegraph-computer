@@ -12,6 +12,16 @@ import (
 	"vermeer/test/functional"
 )
 
+/*
+* @Description: This is the main test function for scheduler.
+* @Param t
+* @Param expectResPath
+* @Param masterHttpAddr
+* @Param graphName
+* @Param factor
+* @Param waitSecond
+* @Note: You must start at least two worker, named worker01 and worker04 in your config.yaml
+ */
 func TestScheduler(t *testing.T, expectResPath string, masterHttpAddr string, graphName string, factor string, waitSecond int) {
 	fmt.Print("start test scheduler\n")
 
