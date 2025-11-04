@@ -1,15 +1,7 @@
 name: "Computer CI"
 
-on:
-  push:
-    branches:
-      - master
-      - /^release-.*$/
-    paths:
-      - computer/**
-  pull_request:
-    paths:
-      - computer/**
+on: push
+
 defaults:
   run:
     working-directory: computer
